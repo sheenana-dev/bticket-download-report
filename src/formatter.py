@@ -80,6 +80,6 @@ def format_report(results: List[StoreResult], report_time: datetime) -> str:
     lines.append("")
     lines.append("Note: Data may be delayed up to")
     lines.append("5 days due to store reporting")
-    lines.append("schedules.")
+    lines.append("policy.")
 
     return "<pre>" + "\n".join(lines) + "</pre>"
