@@ -25,7 +25,7 @@ def load_cumulative_totals() -> dict:
     if os.path.exists(CACHE_FILE):
         with open(CACHE_FILE, "r") as f:
             return json.load(f)
-    return {"apple": 0, "google_play": 0}
+    return {"apple": 408, "google_play": 2172, "google_play_last_date": "Feb 07"}
 
 
 def save_cumulative_totals(totals: dict):
