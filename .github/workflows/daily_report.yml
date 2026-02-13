@@ -1,0 +1,64 @@
+name: Daily Download Report
+
+on:
+  schedule:
+    # 7:00 PM PHT = 11:00 AM UTC (PHT is UTC+8)
+    - cron: '0 11 * * *'
+  workflow_dispatch: # Allow manual trigger for testing
+
+permissions:
+  contents: read
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore cumulative totals cache
+        uses: actions/cache/restore@v4
+        with:
+          path: cumulative_totals.json
+          key: cumulative-totals-${{ github.ref }}
+          restore-keys: |
+            cumulative-totals-
+
+      - name: Write Google service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > /tmp/gcp-sa-key.json
+
+      - name: Run download report
+        env:
+          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+          APPLE_PRIVATE_KEY: ${{ secrets.APPLE_PRIVATE_KEY }}
+          APPLE_VENDOR_NUMBER: ${{ secrets.APPLE_VENDOR_NUMBER }}
+          APPLE_APP_SKU: ${{ secrets.APPLE_APP_SKU }}
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-sa-key.json
+          GOOGLE_PACKAGE_NAME: ${{ secrets.GOOGLE_PACKAGE_NAME }}
+          GOOGLE_BUCKET_ID: ${{ secrets.GOOGLE_BUCKET_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m src.main
+
+      - name: Save cumulative totals cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: cumulative_totals.json
+          key: cumulative-totals-${{ github.ref }}-${{ github.run_id }}
+
+      - name: Clean up credentials
+        if: always()
+        run: rm -f /tmp/gcp-sa-key.json
