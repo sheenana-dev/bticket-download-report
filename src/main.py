@@ -54,11 +54,15 @@ def main():
     results = []
 
     # Apple App Store (T-1 data)
+    # Track last fetched date to avoid double-counting on consecutive runs
     logger.info("Fetching Apple App Store data...")
     apple_client = AppleStoreClient(config.apple)
     apple_result = apple_client.fetch_report(target_date=yesterday)
     if apple_result.daily_downloads is not None:
-        cumulative["apple"] = cumulative.get("apple", 0) + apple_result.daily_downloads
+        last_apple_date = cumulative.get("apple_last_date")
+        if apple_result.data_date != last_apple_date:
+            cumulative["apple"] = cumulative.get("apple", 0) + apple_result.daily_downloads
+            cumulative["apple_last_date"] = apple_result.data_date
     apple_total = cumulative.get("apple", 0)
     apple_result.total_downloads = apple_total if apple_total > 0 else None
     results.append(apple_result)
