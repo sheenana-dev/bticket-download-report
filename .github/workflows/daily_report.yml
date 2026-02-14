@@ -7,7 +7,7 @@ on:
   workflow_dispatch: # Allow manual trigger for testing
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   send-report:
@@ -51,6 +51,13 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python -m src.main
+
+      - name: Commit download history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet || git commit -m "chore: update download history" && git push
 
       - name: Save cumulative totals cache
         if: always()

@@ -14,6 +14,7 @@ from src.config import load_config
 from src.formatter import format_report
 from src.stores.apple import AppleStoreClient
 from src.stores.google_play import GooglePlayClient
+from src.history import save_to_history
 from src.telegram import send_telegram_message
 from src.utils.logger import setup_logging
 
@@ -84,6 +85,13 @@ def main():
     # Save cumulative totals
     cumulative["last_updated"] = now.isoformat()
     save_cumulative_totals(cumulative)
+
+    # Persist to CSV history
+    try:
+        save_to_history(results, cumulative)
+        logger.info("Download history saved to CSV")
+    except Exception as e:
+        logger.warning("Failed to save history CSV (non-fatal): %s", e)
 
     # Format and send report
     message = format_report(results, report_time=now)
