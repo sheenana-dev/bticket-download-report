@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 API_BASE = "https://api.appstoreconnect.apple.com"
 # Product types that represent new downloads (not updates)
-# 1/1F = iPhone/Universal, 3/3F = iPad, 1-B = Business Partner
-DOWNLOAD_PRODUCT_TYPES = {"1", "1F", "1-B", "F1", "3", "3F"}
-# Product type 7/7F/7T = Updates — excluded
+# 1 = iPhone/Universal (paid), 1F = iPhone/Universal (free)
+# Excluded: 3/3F (iPad-only), 1-B (B2B/Volume Purchase), 7/7F/7T (updates)
+DOWNLOAD_PRODUCT_TYPES = {"1", "1F"}
 
 
 class AppleStoreClient(BaseStoreClient):
@@ -69,13 +69,23 @@ class AppleStoreClient(BaseStoreClient):
         for row in reader:
             sku = row.get("SKU", "").strip()
             product_type = row.get("Product Type Identifier", "").strip()
+            units = row.get("Units", "0").strip()
+            title = row.get("Title", "").strip()
 
-            if sku == self.config.app_sku and product_type in DOWNLOAD_PRODUCT_TYPES:
-                try:
-                    total_units += int(row.get("Units", 0))
-                except (ValueError, TypeError):
-                    pass
+            if sku == self.config.app_sku:
+                logger.info(
+                    "Apple TSV row — SKU: %s, Title: %s, Product Type: %s, Units: %s",
+                    sku, title, product_type, units,
+                )
+                if product_type in DOWNLOAD_PRODUCT_TYPES:
+                    try:
+                        total_units += int(units)
+                    except (ValueError, TypeError):
+                        pass
+                else:
+                    logger.info("  -> Skipped (product type '%s' not in download types)", product_type)
 
+        logger.info("Apple total download units for SKU %s: %d", self.config.app_sku, total_units)
         return total_units
 
     def fetch_report(self, target_date: date) -> StoreResult:
