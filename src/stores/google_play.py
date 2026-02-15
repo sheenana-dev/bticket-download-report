@@ -39,7 +39,7 @@ class GooglePlayClient(BaseStoreClient):
             return None
 
     def _parse_csv(self, csv_text: str, target_date: date) -> Optional[int]:
-        """Parse Google Play installs CSV. Returns daily_installs."""
+        """Parse Google Play installs CSV. Returns daily user installs."""
         reader = csv.DictReader(io.StringIO(csv_text))
 
         target_str = target_date.strftime("%Y-%m-%d")
@@ -47,7 +47,15 @@ class GooglePlayClient(BaseStoreClient):
         for row in reader:
             row_date = row.get("Date", "").strip()
             if row_date == target_str:
-                return self._safe_int(row.get("Daily Device Installs"))
+                daily_user = self._safe_int(row.get("Daily User Installs"))
+                daily_device = self._safe_int(row.get("Daily Device Installs"))
+                total_user = self._safe_int(row.get("Total User Installs"))
+                logger.info(
+                    "Google Play CSV row — Date: %s, Daily User Installs: %s, "
+                    "Daily Device Installs: %s, Total User Installs: %s",
+                    row_date, daily_user, daily_device, total_user,
+                )
+                return daily_user
 
         return None
 
