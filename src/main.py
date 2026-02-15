@@ -14,7 +14,7 @@ from src.config import load_config
 from src.formatter import format_report
 from src.stores.apple import AppleStoreClient
 from src.stores.google_play import GooglePlayClient
-from src.history import save_to_history
+from src.history import save_to_history, correct_history_rows
 from src.telegram import send_telegram_message
 from src.utils.logger import setup_logging
 
@@ -26,7 +26,7 @@ def load_cumulative_totals() -> dict:
     if os.path.exists(CACHE_FILE):
         with open(CACHE_FILE, "r") as f:
             return json.load(f)
-    return {"apple": 536, "google_play": 2221, "apple_last_date": "Feb 13", "google_play_last_date": "Feb 13"}
+    return {"apple": 359, "google_play": 166, "apple_last_date": "Feb 14", "google_play_last_date": "Feb 14"}
 
 
 def save_cumulative_totals(totals: dict):
@@ -92,6 +92,19 @@ def main():
         logger.info("Download history saved to CSV")
     except Exception as e:
         logger.warning("Failed to save history CSV (non-fatal): %s", e)
+
+    # Re-fetch recent Google Play data to correct retroactive GCS updates
+    try:
+        recent_gp = google_client.fetch_recent_reports(target_date=yesterday)
+        if recent_gp:
+            corrected = correct_history_rows(recent_gp)
+            if corrected:
+                for key, total in corrected.items():
+                    cumulative[key] = total
+                save_cumulative_totals(cumulative)
+                logger.info("Applied Google Play retroactive corrections")
+    except Exception as e:
+        logger.warning("Google Play correction check failed (non-fatal): %s", e)
 
     # Format and send report
     message = format_report(results, report_time=now)

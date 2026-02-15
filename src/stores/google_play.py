@@ -69,6 +69,32 @@ class GooglePlayClient(BaseStoreClient):
         except (ValueError, TypeError):
             return None
 
+    def fetch_recent_reports(self, target_date: date, lookback_days: int = 7) -> list[StoreResult]:
+        """Re-fetch daily data for the last N days to detect retroactive corrections."""
+        results = []
+        csv_cache: dict[str, Optional[str]] = {}
+
+        for days_offset in range(lookback_days):
+            check_date = target_date - timedelta(days=days_offset)
+            year_month = check_date.strftime("%Y%m")
+
+            if year_month not in csv_cache:
+                csv_cache[year_month] = self._download_csv(year_month)
+
+            csv_text = csv_cache[year_month]
+            if csv_text is None:
+                continue
+
+            daily = self._parse_csv(csv_text, check_date)
+            if daily is not None:
+                results.append(StoreResult(
+                    store_name="Google Play",
+                    daily_downloads=daily,
+                    data_date=check_date.strftime("%b %d"),
+                ))
+
+        return results
+
     def fetch_report(self, target_date: date) -> StoreResult:
         try:
             # Google Play CSV data has ~5 day delay, try up to 7 days back

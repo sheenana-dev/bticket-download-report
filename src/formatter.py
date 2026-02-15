@@ -8,6 +8,11 @@ STORE_ICONS = {
     "Google Play": "\U0001f916",
 }
 
+STORE_LABELS = {
+    "App Store": "App Store (Latest)",
+    "Google Play": "Google Play (New)",
+}
+
 
 def _fmt(value: Optional[int]) -> str:
     """Format a number with commas, or 'N/A' if None."""
@@ -75,7 +80,8 @@ def format_report(results: List[StoreResult], report_time: datetime) -> str:
             today_str = _fmt(r.daily_downloads)
             total_str = _fmt(r.total_downloads)
 
-        lines.append(f"{icon} {r.store_name}{date_note}")
+        label = STORE_LABELS.get(r.store_name, r.store_name)
+        lines.append(f"{icon} {label}{date_note}")
         lines.append(f"   Today: {today_str} | Total: {total_str}")
         lines.append("")
 
@@ -114,7 +120,8 @@ def format_report(results: List[StoreResult], report_time: datetime) -> str:
             today_str = _fmt(r.daily_downloads)
             total_str = _fmt(r.total_downloads)
 
-        lines.append(f"{icon} {r.store_name}{date_note}")
+        label = STORE_LABELS.get(r.store_name, r.store_name)
+        lines.append(f"{icon} {label}{date_note}")
         lines.append(f"   \u4eca\u65e5: {today_str} | \u7d2f\u8a08: {total_str}")
         lines.append("")
 
