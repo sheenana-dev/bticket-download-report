@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 API_BASE = "https://api.appstoreconnect.apple.com"
 # Product types that represent new downloads (not updates)
 # 1 = iPhone/Universal (paid), 1F = iPhone/Universal (free)
-# Excluded: 3/3F (iPad-only), 1-B (B2B/Volume Purchase), 7/7F/7T (updates)
-DOWNLOAD_PRODUCT_TYPES = {"1", "1F"}
+# 3 = iPad (paid), 3F = iPad (free)
+# Excluded: 1-B (B2B/Volume Purchase), 7/7F/7T (updates)
+DOWNLOAD_PRODUCT_TYPES = {"1", "1F", "3", "3F"}
 
 
 class AppleStoreClient(BaseStoreClient):
