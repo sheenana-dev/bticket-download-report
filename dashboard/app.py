@@ -309,20 +309,23 @@ hr {
 
 @st.cache_data(ttl=300)
 def load_data() -> pd.DataFrame:
-    """Load download data from GitHub raw URL or local file."""
-    csv_url = os.environ.get("GITHUB_CSV_URL", DEFAULT_CSV_URL)
+    """Load download data from local file first, falling back to GitHub."""
     df = None
 
-    if csv_url:
-        try:
-            resp = requests.get(csv_url, timeout=10)
-            resp.raise_for_status()
-            df = pd.read_csv(StringIO(resp.text))
-        except Exception:
-            pass
-
-    if df is None and os.path.exists(LOCAL_CSV_PATH):
+    # Prefer local CSV (has backfilled historical data)
+    if os.path.exists(LOCAL_CSV_PATH):
         df = pd.read_csv(LOCAL_CSV_PATH)
+
+    # Fall back to GitHub raw URL when local file is not available
+    if df is None:
+        csv_url = os.environ.get("GITHUB_CSV_URL", DEFAULT_CSV_URL)
+        if csv_url:
+            try:
+                resp = requests.get(csv_url, timeout=10)
+                resp.raise_for_status()
+                df = pd.read_csv(StringIO(resp.text))
+            except Exception:
+                pass
 
     if df is None or df.empty:
         st.error("No data available. Check your CSV source configuration.")
