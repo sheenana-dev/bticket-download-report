@@ -2,6 +2,7 @@ import json
 import os
 import sys
 from datetime import date, datetime, timedelta
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 try:
@@ -35,7 +36,7 @@ def save_cumulative_totals(totals: dict):
         json.dump(totals, f, indent=2)
 
 
-def _parse_short_date(s: str) -> date | None:
+def _parse_short_date(s: str) -> Optional[date]:
     """Parse 'Feb 14' format to a date (assumes current or previous year)."""
     if not s:
         return None
@@ -53,7 +54,7 @@ def _parse_short_date(s: str) -> date | None:
         return None
 
 
-def _is_newer_date(fetched: str, last: str | None) -> bool:
+def _is_newer_date(fetched: str, last: Optional[str]) -> bool:
     """Return True if fetched data_date is strictly after last recorded date."""
     if not last:
         return True
