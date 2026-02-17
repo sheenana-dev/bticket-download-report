@@ -14,8 +14,9 @@ except ImportError:
 from src.config import load_config
 from src.formatter import format_report
 from src.stores.apple import AppleStoreClient
+from src.stores.base import StoreResult
 from src.stores.google_play import GooglePlayClient
-from src.history import save_to_history, correct_history_rows
+from src.history import save_to_history, correct_history_rows, get_latest_per_platform
 from src.telegram import send_telegram_message
 from src.utils.logger import setup_logging
 
@@ -137,8 +138,38 @@ def main():
     except Exception as e:
         logger.warning("Google Play correction check failed (non-fatal): %s", e)
 
+    # Build report from CSV (single source of truth, matches dashboard)
+    csv_data = get_latest_per_platform()
+    report_results = []
+
+    platform_store_map = {
+        "appstore": "App Store",
+        "googleplay": "Google Play",
+    }
+
+    for platform_key, store_name in platform_store_map.items():
+        if platform_key in csv_data:
+            d = csv_data[platform_key]
+            try:
+                rd = datetime.strptime(d["report_date"], "%Y-%m-%d")
+                data_date_str = rd.strftime("%b %d")
+            except ValueError:
+                data_date_str = d["report_date"]
+            report_results.append(StoreResult(
+                store_name=store_name,
+                daily_downloads=d["daily_downloads"],
+                total_downloads=d["cumulative_total"],
+                data_date=data_date_str,
+            ))
+        else:
+            # Fall back to API result if CSV has no data for this platform
+            for r in results:
+                if r.store_name == store_name:
+                    report_results.append(r)
+                    break
+
     # Format and send report
-    message = format_report(results, report_time=now)
+    message = format_report(report_results, report_time=now)
     logger.info("Report:\n%s", message)
 
     success = send_telegram_message(config.telegram, message)

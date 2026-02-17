@@ -228,3 +228,30 @@ def correct_history_rows(corrections: list[StoreResult]) -> Optional[dict[str, i
         writer.writerows(rows)
 
     logger.info("Applied retroactive corrections to CSV history")
+
+
+def get_latest_per_platform() -> dict[str, dict]:
+    """Read the latest row per platform from CSV.
+
+    Returns:
+        Dict keyed by platform ('appstore', 'googleplay') with
+        'daily_downloads', 'cumulative_total', and 'report_date'.
+    """
+    if not os.path.exists(CSV_PATH):
+        return {}
+
+    latest: dict[str, dict] = {}
+    try:
+        with open(CSV_PATH, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                platform = row["platform"]
+                latest[platform] = {
+                    "daily_downloads": int(row["daily_downloads"]),
+                    "cumulative_total": int(row["cumulative_total"]),
+                    "report_date": row["report_date"],
+                }
+    except (KeyError, csv.Error, ValueError) as e:
+        logger.warning("Error reading CSV for latest data: %s", e)
+
+    return latest

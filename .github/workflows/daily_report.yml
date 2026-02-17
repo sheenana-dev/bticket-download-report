@@ -2,8 +2,8 @@ name: Daily Download Report
 
 on:
   schedule:
-    # 7:00 PM PHT = 11:00 AM UTC (PHT is UTC+8)
-    - cron: '0 11 * * *'
+    # 6:20 PM PHT = 10:20 AM UTC (PHT is UTC+8)
+    - cron: '20 10 * * *'
   workflow_dispatch: # Allow manual trigger for testing
 
 permissions:
