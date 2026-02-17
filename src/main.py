@@ -68,6 +68,7 @@ def _is_newer_date(fetched: str, last: Optional[str]) -> bool:
 
 
 def main():
+    dry_run = "--dry-run" in sys.argv
     logger = setup_logging()
     logger.info("Starting B-Ticket Daily Download Report generation")
 
@@ -171,6 +172,10 @@ def main():
     # Format and send report
     message = format_report(report_results, report_time=now)
     logger.info("Report:\n%s", message)
+
+    if dry_run:
+        logger.info("Dry run — skipping Telegram send")
+        return
 
     success = send_telegram_message(config.telegram, message)
     if not success:
