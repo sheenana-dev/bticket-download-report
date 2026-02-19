@@ -729,11 +729,15 @@ def main() -> None:
 
     # ── Apply sidebar filters for charts ──
     filtered = df.copy()
-    if isinstance(date_range, tuple) and len(date_range) == 2:
-        start, end = pd.Timestamp(date_range[0]), pd.Timestamp(date_range[1])
-        filtered = filtered[
-            (filtered["report_date"] >= start) & (filtered["report_date"] <= end)
-        ]
+    if isinstance(date_range, (tuple, list)):
+        if len(date_range) == 2:
+            start, end = pd.Timestamp(date_range[0]), pd.Timestamp(date_range[1])
+            filtered = filtered[
+                (filtered["report_date"] >= start) & (filtered["report_date"] <= end)
+            ]
+        elif len(date_range) == 1:
+            single = pd.Timestamp(date_range[0])
+            filtered = filtered[filtered["report_date"] == single]
 
     if platform_filter != "All":
         filtered = filtered[filtered["platform_label"] == platform_filter]
