@@ -722,12 +722,7 @@ def main() -> None:
                 unsafe_allow_html=True,
             )
 
-    # ── Hero section (unfiltered — always shows latest day) ──
-    render_hero_section(df)
-
-    st.divider()
-
-    # ── Apply sidebar filters for charts ──
+    # ── Apply sidebar filters ──
     filtered = df.copy()
     if isinstance(date_range, (tuple, list)):
         if len(date_range) == 2:
@@ -745,6 +740,11 @@ def main() -> None:
     if filtered.empty:
         st.warning("No data for the selected filters.")
         return
+
+    # ── Hero section (respects date filter) ──
+    render_hero_section(filtered)
+
+    st.divider()
 
     # ── Charts in tabs ──
     tab_daily, tab_growth, tab_trend, tab_split = st.tabs(
