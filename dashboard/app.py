@@ -673,16 +673,34 @@ def main() -> None:
 
         min_date = df["report_date"].min().date()
         max_date = df["report_date"].max().date()
+
+        if "applied_range" not in st.session_state:
+            st.session_state.applied_range = (min_date, max_date)
+        if "applied_platform" not in st.session_state:
+            st.session_state.applied_platform = "All"
+
         date_range = st.date_input(
             "Date range",
-            value=(min_date, max_date),
+            value=st.session_state.applied_range,
             min_value=min_date,
             max_value=max_date,
             key=f"date_range_{min_date}_{max_date}",
         )
 
         platform_options = ["All", "App Store", "Google Play"]
-        platform_filter = st.selectbox("Platform", platform_options)
+        platform_filter = st.selectbox(
+            "Platform",
+            platform_options,
+            index=platform_options.index(st.session_state.applied_platform),
+        )
+
+        if st.button("Apply", use_container_width=True):
+            st.session_state.applied_range = date_range
+            st.session_state.applied_platform = platform_filter
+            st.rerun()
+
+        date_range = st.session_state.applied_range
+        platform_filter = st.session_state.applied_platform
 
         st.divider()
 
