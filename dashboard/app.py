@@ -365,15 +365,23 @@ def _delta_html(current: int, previous: int) -> str:
 
 
 def render_hero_section(df: pd.DataFrame) -> None:
-    """Render consolidated hero metrics — today's snapshot."""
-    latest_date = df["report_date"].max()
-    today_df = df[df["report_date"] == latest_date]
-    yesterday = latest_date - pd.Timedelta(days=1)
-    yesterday_df = df[df["report_date"] == yesterday]
+    """Render consolidated hero metrics for the filtered date range."""
+    min_date = df["report_date"].min()
+    max_date = df["report_date"].max()
+    num_days = df["report_date"].nunique()
+    is_range = num_days > 1
+
+    if is_range:
+        date_label = (
+            f"\U0001f4c5 {min_date.strftime('%b %d, %Y')} — "
+            f"{max_date.strftime('%b %d, %Y')} ({num_days} days)"
+        )
+    else:
+        date_label = f"\U0001f4c5 {max_date.strftime('%B %d, %Y')}"
 
     st.markdown(
         f"<p style='margin:0 0 16px 0; color:#56A66F; font-size:0.9rem;'>"
-        f"\U0001f4c5 Latest data: <strong>{latest_date.strftime('%B %d, %Y')}</strong></p>",
+        f"{date_label}</p>",
         unsafe_allow_html=True,
     )
 
@@ -382,77 +390,73 @@ def render_hero_section(df: pd.DataFrame) -> None:
         ("\U0001f916", "Google Play", "googleplay", "googleplay"),
     ]
 
-    total_today = 0
-    total_yesterday = 0
+    total_range = 0
     grand_total = 0
 
     cols = st.columns(3)
 
     for i, (icon, label, key, css_cls) in enumerate(platforms):
-        today_row = today_df[today_df["platform"] == key]
-        yest_row = yesterday_df[yesterday_df["platform"] == key]
+        plat_df = df[df["platform"] == key]
+        range_dl = int(plat_df["daily_downloads"].sum())
+        plat_cum = int(plat_df["cumulative_total"].iloc[-1]) if not plat_df.empty else 0
+        daily_avg = range_dl / max(num_days, 1)
 
-        today_dl = int(today_row["daily_downloads"].sum()) if not today_row.empty else 0
-        today_cum = int(today_row["cumulative_total"].iloc[-1]) if not today_row.empty else 0
-        yest_dl = int(yest_row["daily_downloads"].sum()) if not yest_row.empty else 0
+        total_range += range_dl
+        grand_total += plat_cum
 
-        total_today += today_dl
-        total_yesterday += yest_dl
-        grand_total += today_cum
-
-        delta = _delta_html(today_dl, yest_dl)
+        if is_range:
+            sub_text = f"Avg: {daily_avg:,.1f}/day"
+        else:
+            sub_text = ""
 
         with cols[i]:
             st.markdown(
                 f'<div class="hero-card {css_cls}">'
                 f'  <div class="hero-label">{icon} {label}</div>'
-                f'  <div class="hero-value">{today_dl:,}</div>'
-                f'  {delta}'
-                f'  <div class="hero-sub">Total: {today_cum:,}</div>'
+                f'  <div class="hero-value">{range_dl:,}</div>'
+                f'  <div class="hero-sub">{sub_text}</div>'
+                f'  <div class="hero-sub">Total: {plat_cum:,}</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
 
     # Combined card
-    combined_delta = _delta_html(total_today, total_yesterday)
+    combined_avg = total_range / max(num_days, 1)
     with cols[2]:
         st.markdown(
             f'<div class="hero-card combined">'
             f'  <div class="hero-label">\U0001f4e6 Combined</div>'
-            f'  <div class="hero-value">{total_today:,}</div>'
-            f'  {combined_delta}'
+            f'  <div class="hero-value">{total_range:,}</div>'
+            f'  <div class="hero-sub">{"Avg: {0:,.1f}/day".format(combined_avg) if is_range else ""}</div>'
             f'  <div class="hero-sub">Grand Total: {grand_total:,}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
 
-    # Stat pills — secondary insights in compact form
+    # Stat pills
     daily_combined = df.groupby("report_date")["daily_downloads"].sum().sort_index()
-    avg_7 = daily_combined.tail(7).mean()
-    avg_30 = daily_combined.tail(30).mean()
-    pct_vs_avg = ((total_today / avg_7) - 1) * 100 if avg_7 > 0 else 0
+    avg_daily = daily_combined.mean()
     best_day = int(daily_combined.max())
-
-    pct_color = BT_DARK_PASTEL_GREEN if pct_vs_avg >= 0 else BT_CORAL_RED
-    pct_sign = "+" if pct_vs_avg >= 0 else ""
+    best_day_date = daily_combined.idxmax().strftime("%b %d")
+    total_days = len(daily_combined)
 
     st.markdown(
         f'<div class="stat-row">'
         f'  <div class="stat-pill">'
-        f'    <div class="stat-pill-label">7-Day Avg</div>'
-        f'    <div class="stat-pill-value">{avg_7:,.1f}</div>'
-        f'  </div>'
-        f'  <div class="stat-pill">'
-        f'    <div class="stat-pill-label">30-Day Avg</div>'
-        f'    <div class="stat-pill-value">{avg_30:,.1f}</div>'
-        f'  </div>'
-        f'  <div class="stat-pill">'
-        f'    <div class="stat-pill-label">vs 7-Day Avg</div>'
-        f'    <div class="stat-pill-value" style="color:{pct_color}">{pct_sign}{pct_vs_avg:.0f}%</div>'
+        f'    <div class="stat-pill-label">Daily Avg</div>'
+        f'    <div class="stat-pill-value">{avg_daily:,.1f}</div>'
         f'  </div>'
         f'  <div class="stat-pill">'
         f'    <div class="stat-pill-label">Best Day</div>'
         f'    <div class="stat-pill-value">{best_day:,}</div>'
+        f'  </div>'
+        f'  <div class="stat-pill">'
+        f'    <div class="stat-pill-label">Best Date</div>'
+        f'    <div class="stat-pill-value">{best_day_date}</div>'
+        f'  </div>'
+        f'  <div class="stat-pill">'
+        f'    <div class="stat-pill-label">Days</div>'
+        f'    <div class="stat-pill-value">{total_days}</div>'
         f'  </div>'
         f'</div>',
         unsafe_allow_html=True,
