@@ -85,6 +85,20 @@ def main():
     logger.info("Report date: %s, target data date: %s", now.date(), yesterday)
 
     cumulative = load_cumulative_totals()
+
+    # Sync cumulative totals with CSV (source of truth) in case cache is stale
+    csv_latest = get_latest_per_platform()
+    if "appstore" in csv_latest:
+        csv_apple = csv_latest["appstore"]["cumulative_total"]
+        if csv_apple > cumulative.get("apple", 0):
+            cumulative["apple"] = csv_apple
+            logger.info("Synced Apple cumulative from CSV: %d", csv_apple)
+    if "googleplay" in csv_latest:
+        csv_gp = csv_latest["googleplay"]["cumulative_total"]
+        if csv_gp > cumulative.get("google_play", 0):
+            cumulative["google_play"] = csv_gp
+            logger.info("Synced Google Play cumulative from CSV: %d", csv_gp)
+
     results = []
 
     # Apple App Store (T-1 data)

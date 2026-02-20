@@ -228,6 +228,7 @@ def correct_history_rows(corrections: list[StoreResult]) -> Optional[dict[str, i
         writer.writerows(rows)
 
     logger.info("Applied retroactive corrections to CSV history")
+    return updated_totals
 
 
 def get_latest_per_platform() -> dict[str, dict]:
