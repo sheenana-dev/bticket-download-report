@@ -17,12 +17,11 @@ from src.formatter import format_report
 from src.stores.apple import AppleStoreClient
 from src.stores.base import StoreResult
 from src.stores.google_play import GooglePlayClient
-from src.history import save_to_history, correct_history_rows, get_latest_per_platform
+from src.history import save_to_history, correct_history_rows, get_latest_per_platform, CSV_PATH
 from src.telegram import send_telegram_message
 from src.utils.logger import setup_logging
 
 CACHE_FILE = "cumulative_totals.json"
-CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "downloads.csv")
 
 
 def load_cumulative_totals() -> dict:
