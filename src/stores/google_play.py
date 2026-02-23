@@ -69,7 +69,7 @@ class GooglePlayClient(BaseStoreClient):
         except (ValueError, TypeError):
             return None
 
-    def fetch_recent_reports(self, target_date: date, lookback_days: int = 7) -> list[StoreResult]:
+    def fetch_recent_reports(self, target_date: date, lookback_days: int = 14) -> list[StoreResult]:
         """Re-fetch daily data for the last N days to detect retroactive corrections."""
         results = []
         csv_cache: dict[str, Optional[str]] = {}
@@ -97,9 +97,9 @@ class GooglePlayClient(BaseStoreClient):
 
     def fetch_report(self, target_date: date) -> StoreResult:
         try:
-            # Google Play CSV data has ~5 day delay, try up to 14 days back
+            # Google Play CSV data has ~5 day delay, try up to 30 days back
             csv_cache: dict[str, Optional[str]] = {}
-            for days_offset in range(14):
+            for days_offset in range(30):
                 check_date = target_date - timedelta(days=days_offset)
                 year_month = check_date.strftime("%Y%m")
 

@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import sys
@@ -21,6 +22,7 @@ from src.telegram import send_telegram_message
 from src.utils.logger import setup_logging
 
 CACHE_FILE = "cumulative_totals.json"
+CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "downloads.csv")
 
 
 def load_cumulative_totals() -> dict:
@@ -67,8 +69,97 @@ def _is_newer_date(fetched: str, last: Optional[str]) -> bool:
     return fetched_d > last_d
 
 
+def _backfill_google_play(data_str: str) -> None:
+    """Manually backfill Google Play data from Play Console UI.
+
+    Args:
+        data_str: Comma-separated date:downloads pairs, e.g.
+                  "2026-02-15:3,2026-02-16:2,2026-02-17:1"
+    """
+    logger = setup_logging()
+    logger.info("Starting Google Play manual backfill")
+
+    cumulative = load_cumulative_totals()
+    existing_keys = set()
+    rows = []
+
+    # Read existing CSV
+    if os.path.exists(CSV_PATH):
+        with open(CSV_PATH, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rows.append(dict(row))
+                existing_keys.add((row["report_date"], row["platform"]))
+
+    # Parse input
+    today_str = date.today().isoformat()
+    entries = [e.strip() for e in data_str.split(",") if e.strip()]
+    new_rows = []
+    for entry in entries:
+        parts = entry.split(":")
+        if len(parts) != 2:
+            logger.warning("Skipping invalid entry: %s", entry)
+            continue
+        report_date, daily_str = parts[0].strip(), parts[1].strip()
+        try:
+            date.fromisoformat(report_date)
+            daily = int(daily_str)
+        except (ValueError, TypeError):
+            logger.warning("Skipping invalid entry: %s", entry)
+            continue
+
+        if (report_date, "googleplay") in existing_keys:
+            logger.info("Skipping %s — already in CSV", report_date)
+            continue
+
+        cumulative["google_play"] = cumulative.get("google_play", 0) + daily
+        cumulative["google_play_last_date"] = datetime.strptime(report_date, "%Y-%m-%d").strftime("%b %d")
+
+        new_rows.append({
+            "date": today_str,
+            "report_date": report_date,
+            "platform": "googleplay",
+            "daily_downloads": str(daily),
+            "cumulative_total": str(cumulative["google_play"]),
+        })
+        existing_keys.add((report_date, "googleplay"))
+        logger.info("Adding Google Play %s: %d downloads (cumulative: %d)",
+                     report_date, daily, cumulative["google_play"])
+
+    if not new_rows:
+        logger.info("No new rows to backfill")
+        return
+
+    # Append to CSV
+    headers = ["date", "report_date", "platform", "daily_downloads", "cumulative_total"]
+    with open(CSV_PATH, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writerows(new_rows)
+
+    # Save cumulative totals
+    cumulative["last_updated"] = datetime.now().isoformat()
+    save_cumulative_totals(cumulative)
+
+    logger.info("Backfilled %d Google Play row(s)", len(new_rows))
+
+
 def main():
     dry_run = "--dry-run" in sys.argv
+
+    # Handle manual Google Play backfill
+    for arg in sys.argv:
+        if arg.startswith("--backfill-gp="):
+            _backfill_google_play(arg.split("=", 1)[1])
+            return
+    backfill_idx = None
+    for i, arg in enumerate(sys.argv):
+        if arg == "--backfill-gp" and i + 1 < len(sys.argv):
+            backfill_idx = i
+            break
+    if backfill_idx is not None:
+        _backfill_google_play(sys.argv[backfill_idx + 1])
+        return
+
     logger = setup_logging()
     logger.info("Starting B-Ticket Daily Download Report generation")
 
