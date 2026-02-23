@@ -97,12 +97,16 @@ class GooglePlayClient(BaseStoreClient):
 
     def fetch_report(self, target_date: date) -> StoreResult:
         try:
-            # Google Play CSV data has ~5 day delay, try up to 7 days back
-            for days_offset in range(7):
+            # Google Play CSV data has ~5 day delay, try up to 14 days back
+            csv_cache: dict[str, Optional[str]] = {}
+            for days_offset in range(14):
                 check_date = target_date - timedelta(days=days_offset)
                 year_month = check_date.strftime("%Y%m")
-                csv_text = self._download_csv(year_month)
 
+                if year_month not in csv_cache:
+                    csv_cache[year_month] = self._download_csv(year_month)
+
+                csv_text = csv_cache[year_month]
                 if csv_text is None:
                     continue
 
