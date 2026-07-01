@@ -2,8 +2,12 @@ name: Daily Download Report
 
 on:
   schedule:
-    # 6:20 PM PHT = 10:20 AM UTC (PHT is UTC+8)
-    - cron: '20 10 * * *'
+    # 4:37 PM PHT = 8:37 AM UTC (PHT is UTC+8).
+    # Earlier + off-peak, odd minute: GitHub queues schedule events on shared
+    # runners and delays can reach several hours during busy windows (the old
+    # 10:20 UTC slot drifted past midnight PHT). This buffer keeps delivery in
+    # the evening. Timing is still best-effort — see external-trigger note below.
+    - cron: '37 8 * * *'
   workflow_dispatch: # Allow manual trigger for testing
 
 permissions:
