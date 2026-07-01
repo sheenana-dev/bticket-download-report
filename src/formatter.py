@@ -13,12 +13,26 @@ STORE_LABELS = {
     "Google Play": "Google Play (New)",
 }
 
+# Flag a store as stale when its latest data lags the run date by more than N
+# days. App Store is T-1; Google Play carries an inherent ~5-day export delay,
+# so its threshold is higher to avoid false alarms on normal lag.
+STALE_THRESHOLDS = {"App Store": 3, "Google Play": 7}
+DEFAULT_STALE_THRESHOLD = 5
+
 
 def _fmt(value: Optional[int]) -> str:
     """Format a number with commas, or 'N/A' if None."""
     if value is None:
         return "N/A"
     return f"{value:,}"
+
+
+def _stale_days(r: StoreResult) -> Optional[int]:
+    """Return how many days the store's data is stale, or None if within range."""
+    if r.stale_days is None:
+        return None
+    threshold = STALE_THRESHOLDS.get(r.store_name, DEFAULT_STALE_THRESHOLD)
+    return r.stale_days if r.stale_days > threshold else None
 
 
 def format_report(results: List[StoreResult], report_time: datetime) -> str:
@@ -73,15 +87,18 @@ def format_report(results: List[StoreResult], report_time: datetime) -> str:
 
         if r.error_message and r.daily_downloads is None:
             date_note = ""
+            stale_note = ""
             today_str = "\u26a0\ufe0f Unavailable"
             total_str = "\u26a0\ufe0f Unavailable"
         else:
             date_note = f" (data: {r.data_date})" if r.data_date else ""
+            stale = _stale_days(r)
+            stale_note = f" \u26a0\ufe0f {stale}d behind" if stale is not None else ""
             today_str = _fmt(r.daily_downloads)
             total_str = _fmt(r.total_downloads)
 
         label = STORE_LABELS.get(r.store_name, r.store_name)
-        lines.append(f"{icon} {label}{date_note}")
+        lines.append(f"{icon} {label}{date_note}{stale_note}")
         lines.append(f"   Today: {today_str} | Total: {total_str}")
         lines.append("")
 
@@ -113,15 +130,18 @@ def format_report(results: List[StoreResult], report_time: datetime) -> str:
 
         if r.error_message and r.daily_downloads is None:
             date_note = ""
+            stale_note = ""
             today_str = "\u26a0\ufe0f \u53d6\u5f97\u4e0d\u53ef"
             total_str = "\u26a0\ufe0f \u53d6\u5f97\u4e0d\u53ef"
         else:
             date_note = f" (\u30c7\u30fc\u30bf: {r.data_date})" if r.data_date else ""
+            stale = _stale_days(r)
+            stale_note = f" \u26a0\ufe0f {stale}\u65e5\u9045\u5ef6" if stale is not None else ""
             today_str = _fmt(r.daily_downloads)
             total_str = _fmt(r.total_downloads)
 
         label = STORE_LABELS.get(r.store_name, r.store_name)
-        lines.append(f"{icon} {label}{date_note}")
+        lines.append(f"{icon} {label}{date_note}{stale_note}")
         lines.append(f"   \u4eca\u65e5: {today_str} | \u7d2f\u8a08: {total_str}")
         lines.append("")
 

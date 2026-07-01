@@ -7,6 +7,7 @@ and dashboard visualization.
 import csv
 import logging
 import os
+import tempfile
 from datetime import date, datetime
 from typing import Optional
 
@@ -138,26 +139,31 @@ def save_to_history(results: list[StoreResult], cumulative: dict) -> None:
     logger.info("Wrote %d row(s) to %s", len(rows_to_write), CSV_PATH)
 
 
-def correct_history_rows(corrections: list[StoreResult]) -> Optional[dict[str, int]]:
-    """Update existing CSV rows with corrected daily download values.
+def reconcile_history_rows(reports: list[StoreResult]) -> Optional[dict[str, int]]:
+    """Reconcile CSV history against freshly fetched daily values.
 
-    GCS data gets retroactively updated. This compares fresh values against
-    existing CSV rows and corrects any differences, then recalculates
-    cumulative totals for affected platforms.
+    Store exports (esp. Google Play's GCS export) can stall and then backfill
+    several days at once. A run only fetches a single "newest" date, so those
+    intermediate days would otherwise never be recorded — undercounting the
+    cumulative. This reconciles the CSV against a multi-day fetch:
+      - inserts any missing (report_date, platform) days, and
+      - corrects existing rows whose daily value changed (retroactive updates),
+    then rebuilds the cumulative running total per platform in date order.
 
     Args:
-        corrections: List of StoreResult with freshly fetched daily values.
+        reports: List of StoreResult with freshly fetched daily values,
+            typically spanning the last N days per platform.
 
     Returns:
         Dict with updated cumulative totals by key ('apple'/'google_play'),
-        or None if no corrections were needed.
+        or None if nothing changed.
     """
     if not os.path.exists(CSV_PATH):
         return None
 
-    # Build correction map: (report_date, platform) -> daily_downloads
-    correction_map: dict[tuple[str, str], int] = {}
-    for result in corrections:
+    # Build fetched map: (report_date, platform) -> daily_downloads
+    fetched: dict[tuple[str, str], int] = {}
+    for result in reports:
         if result.daily_downloads is None:
             continue
         platform = PLATFORM_MAP.get(result.store_name)
@@ -166,69 +172,120 @@ def correct_history_rows(corrections: list[StoreResult]) -> Optional[dict[str, i
         report_date = _parse_data_date(result.data_date) if result.data_date else None
         if not report_date:
             continue
-        correction_map[(report_date, platform)] = result.daily_downloads
+        fetched[(report_date, platform)] = result.daily_downloads
 
-    if not correction_map:
+    if not fetched:
         return None
 
     # Read existing CSV
-    rows: list[dict] = []
+    rows: list[dict[str, str]] = []
     with open(CSV_PATH, "r", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
             rows.append(dict(row))
 
-    # Calculate base per platform BEFORE applying corrections
-    platform_bases: dict[str, int] = {}
-    for row in rows:
-        p = row["platform"]
-        if p not in platform_bases:
-            platform_bases[p] = int(row["cumulative_total"]) - int(row["daily_downloads"])
+    existing_keys = {(row["report_date"], row["platform"]) for row in rows}
 
-    # Apply corrections
+    # Capture each platform's base offset (total before its earliest day) from
+    # the EXISTING rows, before any inserts. Deriving the base later from a
+    # freshly inserted row would use its placeholder cumulative and corrupt the
+    # running total, so it must be pinned to real historical data here.
+    platform_bases = _platform_bases(rows)
+
+    today_str = date.today().isoformat()
     changed = False
+
+    # Correct existing rows whose daily value differs
     for row in rows:
         key = (row["report_date"], row["platform"])
-        if key in correction_map:
-            new_daily = correction_map[key]
-            old_daily = int(row["daily_downloads"])
-            if old_daily != new_daily:
-                logger.info(
-                    "Correcting %s %s: daily %d -> %d",
-                    key[1], key[0], old_daily, new_daily,
-                )
-                row["daily_downloads"] = str(new_daily)
-                changed = True
+        if key in fetched and int(row["daily_downloads"]) != fetched[key]:
+            logger.info(
+                "Correcting %s %s: daily %s -> %d",
+                key[1], key[0], row["daily_downloads"], fetched[key],
+            )
+            row["daily_downloads"] = str(fetched[key])
+            changed = True
+
+    # Insert missing days (cumulative filled in during recompute below)
+    for (report_date, platform), daily in fetched.items():
+        if (report_date, platform) not in existing_keys:
+            logger.info("Backfilling missing %s %s: daily %d", platform, report_date, daily)
+            rows.append({
+                "date": today_str,
+                "report_date": report_date,
+                "platform": platform,
+                "daily_downloads": str(daily),
+                "cumulative_total": "0",
+            })
+            changed = True
 
     if not changed:
         return None
 
-    # Recalculate cumulative totals per platform
-    platform_rows: dict[str, list[dict]] = {}
+    # Rewrite in report_date order so the latest row per platform lands at the
+    # tail (the dashboard reads it positionally) and the running sum is coherent.
+    rows.sort(key=lambda r: r["report_date"])
+    updated_totals = _rebuild_cumulative(rows, platform_bases)
+    _write_history(rows)
+
+    logger.info("Reconciled CSV history (inserts + corrections)")
+    return updated_totals
+
+
+def _platform_bases(rows: list[dict[str, str]]) -> dict[str, int]:
+    """Base offset per platform: the cumulative total before its earliest day."""
+    bases: dict[str, int] = {}
+    for row in sorted(rows, key=lambda r: r["report_date"]):
+        platform = row["platform"]
+        if platform not in bases:
+            bases[platform] = int(row["cumulative_total"]) - int(row["daily_downloads"])
+    return bases
+
+
+def _rebuild_cumulative(
+    rows: list[dict[str, str]], platform_bases: dict[str, int]
+) -> dict[str, int]:
+    """Recompute the cumulative running total per platform.
+
+    ``rows`` must already be sorted by ``report_date``. Each platform's running
+    sum starts from its supplied base (0 for a platform with no prior rows), so
+    the pre-history offset is preserved even when older days are backfilled.
+    Mutates each row's ``cumulative_total`` and returns the final total per
+    cumulative key ('apple'/'google_play').
+    """
+    platform_rows: dict[str, list[dict[str, str]]] = {}
     for row in rows:
-        p = row["platform"]
-        if p not in platform_rows:
-            platform_rows[p] = []
-        platform_rows[p].append(row)
+        platform_rows.setdefault(row["platform"], []).append(row)
 
     updated_totals: dict[str, int] = {}
     for platform, p_rows in platform_rows.items():
-        base = platform_bases.get(platform, 0)
-        running = base
+        running = platform_bases.get(platform, 0)
         for row in p_rows:
             running += int(row["daily_downloads"])
             row["cumulative_total"] = str(running)
         cum_key = "apple" if platform == "appstore" else "google_play"
         updated_totals[cum_key] = running
 
-    # Rewrite CSV
-    with open(CSV_PATH, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
-        writer.writeheader()
-        writer.writerows(rows)
-
-    logger.info("Applied retroactive corrections to CSV history")
     return updated_totals
+
+
+def _write_history(rows: list[dict[str, str]]) -> None:
+    """Atomically rewrite the history CSV (temp file + os.replace).
+
+    The reconcile path rewrites the whole file, so a crash mid-write would
+    corrupt the single source of truth; the swap makes it all-or-nothing.
+    """
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(CSV_PATH), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
+            writer.writeheader()
+            writer.writerows(rows)
+        os.replace(tmp_path, CSV_PATH)
+    except BaseException:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
 
 
 def get_latest_per_platform() -> dict[str, dict]:
@@ -247,6 +304,10 @@ def get_latest_per_platform() -> dict[str, dict]:
             reader = csv.DictReader(f)
             for row in reader:
                 platform = row["platform"]
+                # Keep the row with the greatest report_date — robust to rows
+                # being appended/backfilled out of chronological order.
+                if platform in latest and row["report_date"] <= latest[platform]["report_date"]:
+                    continue
                 latest[platform] = {
                     "daily_downloads": int(row["daily_downloads"]),
                     "cumulative_total": int(row["cumulative_total"]),

@@ -17,7 +17,7 @@ from src.formatter import format_report
 from src.stores.apple import AppleStoreClient
 from src.stores.base import StoreResult
 from src.stores.google_play import GooglePlayClient
-from src.history import save_to_history, correct_history_rows, get_latest_per_platform, CSV_PATH
+from src.history import save_to_history, reconcile_history_rows, get_latest_per_platform, CSV_PATH
 from src.telegram import send_telegram_message
 from src.utils.logger import setup_logging
 
@@ -216,18 +216,22 @@ def main():
     except Exception as e:
         logger.warning("Failed to save history CSV (non-fatal): %s", e)
 
-    # Re-fetch recent Google Play data to correct retroactive GCS updates
+    # Re-fetch recent Google Play data to backfill stalled days and correct
+    # retroactive GCS updates (the export can freeze then publish several days
+    # at once — a single-date fetch would miss the intermediate days).
     try:
-        recent_gp = google_client.fetch_recent_reports(target_date=yesterday)
+        # 30-day window so a multi-week export stall is still fully backfilled
+        # when it resumes (GCS monthly CSVs are cached per month, so this is cheap).
+        recent_gp = google_client.fetch_recent_reports(target_date=yesterday, lookback_days=30)
         if recent_gp:
-            corrected = correct_history_rows(recent_gp)
-            if corrected:
-                for key, total in corrected.items():
+            reconciled = reconcile_history_rows(recent_gp)
+            if reconciled:
+                for key, total in reconciled.items():
                     cumulative[key] = total
                 save_cumulative_totals(cumulative)
-                logger.info("Applied Google Play retroactive corrections")
+                logger.info("Reconciled Google Play history (backfill + corrections)")
     except Exception as e:
-        logger.warning("Google Play correction check failed (non-fatal): %s", e)
+        logger.warning("Google Play reconciliation failed (non-fatal): %s", e)
 
     # Build report from CSV (single source of truth, matches dashboard)
     csv_data = get_latest_per_platform()
@@ -241,9 +245,11 @@ def main():
     for platform_key, store_name in platform_store_map.items():
         if platform_key in csv_data:
             d = csv_data[platform_key]
+            stale_days = None
             try:
                 rd = datetime.strptime(d["report_date"], "%Y-%m-%d")
                 data_date_str = rd.strftime("%b %d")
+                stale_days = (now.date() - rd.date()).days
             except ValueError:
                 data_date_str = d["report_date"]
             report_results.append(StoreResult(
@@ -251,6 +257,7 @@ def main():
                 daily_downloads=d["daily_downloads"],
                 total_downloads=d["cumulative_total"],
                 data_date=data_date_str,
+                stale_days=stale_days,
             ))
         else:
             # Fall back to API result if CSV has no data for this platform

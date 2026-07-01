@@ -11,6 +11,9 @@ class StoreResult:
     total_downloads: Optional[int] = None
     data_date: Optional[str] = None
     error_message: Optional[str] = None
+    # How many days the reported data lags the run date. Used to flag stale
+    # sources (e.g. a stalled store export) in the report. None = unknown.
+    stale_days: Optional[int] = None
 
 
 class BaseStoreClient(ABC):
