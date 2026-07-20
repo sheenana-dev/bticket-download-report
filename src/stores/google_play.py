@@ -95,6 +95,52 @@ class GooglePlayClient(BaseStoreClient):
 
         return results
 
+    def _overview_year_months(self) -> list[str]:
+        """List every YYYYMM that has an installs overview file for this package."""
+        prefix = "stats/installs/"
+        suffix = "_overview.csv"
+        year_months: list[str] = []
+        for blob in self.client.list_blobs(self.config.bucket_id, prefix=prefix):
+            name = blob.name.split("/")[-1]
+            if not name.startswith("installs_") or not name.endswith(suffix):
+                continue
+            # installs_<pkg>_<yyyymm>_overview.csv -> exact package match only
+            core = name[len("installs_"):-len(suffix)]
+            pkg, _, year_month = core.rpartition("_")
+            if pkg == self.config.package_name and year_month.isdigit():
+                year_months.append(year_month)
+        return sorted(year_months)
+
+    def fetch_churn(self, target_date: date) -> tuple[Optional[int], Optional[int]]:
+        """Return (latest daily uninstalls, cumulative uninstalls) from the export.
+
+        Cumulative sums "Daily User Uninstalls" across every monthly overview
+        file; daily is the value for the most recent dated row (the export is the
+        history, so this is recomputed each run and self-corrects on backfill).
+        """
+        try:
+            total = 0
+            latest_date = ""
+            latest_daily: Optional[int] = None
+            for year_month in self._overview_year_months():
+                csv_text = self._download_csv(year_month)
+                if csv_text is None:
+                    continue
+                for row in csv.DictReader(io.StringIO(csv_text)):
+                    daily = self._safe_int(row.get("Daily User Uninstalls"))
+                    if daily is None:
+                        continue
+                    total += daily
+                    row_date = row.get("Date", "").strip()
+                    if row_date > latest_date:
+                        latest_date, latest_daily = row_date, daily
+            if latest_daily is None:
+                return None, None
+            return latest_daily, total
+        except Exception as e:
+            logger.warning("Google Play churn fetch failed (non-fatal): %s", e)
+            return None, None
+
     def fetch_report(self, target_date: date) -> StoreResult:
         try:
             # Google Play CSV data has ~5 day delay, try up to 30 days back

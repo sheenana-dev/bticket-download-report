@@ -14,6 +14,10 @@ class StoreResult:
     # How many days the reported data lags the run date. Used to flag stale
     # sources (e.g. a stalled store export) in the report. None = unknown.
     stale_days: Optional[int] = None
+    # Churn: uninstalls for the latest day and cumulative all-time. None when the
+    # source can't provide them (e.g. Apple Sales API has no deletion data).
+    daily_uninstalls: Optional[int] = None
+    total_uninstalls: Optional[int] = None
 
 
 class BaseStoreClient(ABC):

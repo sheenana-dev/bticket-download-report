@@ -232,9 +232,19 @@ def main():
     except Exception as e:
         logger.warning("Google Play reconciliation failed (non-fatal): %s", e)
 
+    # Churn (uninstalls) is sourced live from the export, not the CSV. Never let
+    # it break the core report.
+    churn: dict = {}
+    try:
+        gp_daily_un, gp_total_un = google_client.fetch_churn(yesterday)
+        if gp_total_un is not None:
+            churn["Google Play"] = (gp_daily_un, gp_total_un)
+    except Exception as e:
+        logger.warning("Churn fetch failed (non-fatal): %s", e)
+
     # Build report from CSV (single source of truth, matches dashboard); fall
     # back to this run's API results for a platform not yet in the CSV.
-    message = build_report(now, fallback=results)
+    message = build_report(now, fallback=results, churn=churn)
     logger.info("Report:\n%s", message)
 
     if dry_run:

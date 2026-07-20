@@ -17,17 +17,24 @@ PLATFORM_STORE_MAP = {
     "googleplay": "Google Play",
 }
 
+# store name -> (daily uninstalls, cumulative uninstalls)
+Churn = dict[str, tuple[Optional[int], Optional[int]]]
+
 
 def build_report_results(
-    now: datetime, fallback: Optional[list[StoreResult]] = None
+    now: datetime,
+    fallback: Optional[list[StoreResult]] = None,
+    churn: Optional[Churn] = None,
 ) -> list[StoreResult]:
     """Assemble per-store results from the CSV, newest row per platform.
 
     ``fallback`` supplies API results for a platform missing from the CSV
-    (e.g. a first-ever run before any row is written).
+    (e.g. a first-ever run before any row is written). ``churn`` attaches
+    uninstall counts (daily, cumulative) per store name when available.
     """
     csv_data = get_latest_per_platform()
     fallback = fallback or []
+    churn = churn or {}
     results: list[StoreResult] = []
 
     for platform_key, store_name in PLATFORM_STORE_MAP.items():
@@ -53,9 +60,18 @@ def build_report_results(
                     results.append(r)
                     break
 
+    for r in results:
+        daily_un, total_un = churn.get(r.store_name, (None, None))
+        r.daily_uninstalls = daily_un
+        r.total_uninstalls = total_un
+
     return results
 
 
-def build_report(now: datetime, fallback: Optional[list[StoreResult]] = None) -> str:
+def build_report(
+    now: datetime,
+    fallback: Optional[list[StoreResult]] = None,
+    churn: Optional[Churn] = None,
+) -> str:
     """Render the full bilingual report string from CSV history."""
-    return format_report(build_report_results(now, fallback), report_time=now)
+    return format_report(build_report_results(now, fallback, churn), report_time=now)

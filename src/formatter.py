@@ -100,6 +100,11 @@ def format_report(results: List[StoreResult], report_time: datetime) -> str:
         label = STORE_LABELS.get(r.store_name, r.store_name)
         lines.append(f"{icon} {label}{date_note}{stale_note}")
         lines.append(f"   Today: {today_str} | Total: {total_str}")
+        if r.total_uninstalls is not None:
+            lines.append(
+                f"   \U0001f4c9 Churn: {_fmt(r.daily_uninstalls)} today | "
+                f"{_fmt(r.total_uninstalls)} total"
+            )
         lines.append("")
 
     lines.append("\u2501" * 30)
@@ -143,6 +148,11 @@ def format_report(results: List[StoreResult], report_time: datetime) -> str:
         label = STORE_LABELS.get(r.store_name, r.store_name)
         lines.append(f"{icon} {label}{date_note}{stale_note}")
         lines.append(f"   \u4eca\u65e5: {today_str} | \u7d2f\u8a08: {total_str}")
+        if r.total_uninstalls is not None:
+            lines.append(
+                f"   \U0001f4c9 \u30a2\u30f3\u30a4\u30f3\u30b9\u30c8\u30fc\u30eb: "
+                f"{_fmt(r.daily_uninstalls)} \u4eca\u65e5 | {_fmt(r.total_uninstalls)} \u7d2f\u8a08"
+            )
         lines.append("")
 
     lines.append("\u2501" * 30)
