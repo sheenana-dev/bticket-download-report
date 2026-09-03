@@ -16,3 +16,5 @@ htmlcov/
 venv/
 .venv/
 CLAUDE*.md
+reports/
+.DS_Store
