@@ -1,20 +1,24 @@
-name: Daily Download Report
+name: Monthly Revenue Report (PDF)
 
 on:
   schedule:
-    # 4:37 PM PHT = 8:37 AM UTC (PHT is UTC+8).
-    # Earlier + off-peak, odd minute: GitHub queues schedule events on shared
-    # runners and delays can reach several hours during busy windows (the old
-    # 10:20 UTC slot drifted past midnight PHT). This buffer keeps delivery in
-    # the evening. Timing is still best-effort — see external-trigger note below.
-    - cron: '37 8 * * *'
-  workflow_dispatch: # Allow manual trigger for testing
+    # 6th of each month, 09:07 PHT = 01:07 UTC. Google's earnings report for
+    # the prior month lands ~5th; Apple's MONTHLY sales report is available
+    # from the 1st–2nd. If Google is late the PDF still ships, marked
+    # "not published yet" — re-run manually (workflow_dispatch) once it lands.
+    - cron: '7 1 6 * *'
+  workflow_dispatch:
+    inputs:
+      month:
+        description: 'Month to report (YYYY-MM). Default: previous month.'
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 jobs:
-  send-report:
+  monthly-revenue:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -31,36 +35,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Restore cumulative totals cache
-        uses: actions/cache/restore@v4
-        with:
-          path: cumulative_totals.json
-          key: cumulative-totals-${{ github.ref }}
-          restore-keys: |
-            cumulative-totals-
+      # Japanese TrueType font for the PDF (reportlab can't embed the OTF/CFF
+      # Noto CJK build). DejaVu (₱ glyph) ships with the runner image.
+      - name: Install Japanese font
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-ipafont-gothic fonts-dejavu-core
 
       - name: Write Google service account key
         run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > /tmp/gcp-sa-key.json
 
-      - name: Run download report
-        env:
-          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
-          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
-          APPLE_PRIVATE_KEY: ${{ secrets.APPLE_PRIVATE_KEY }}
-          APPLE_VENDOR_NUMBER: ${{ secrets.APPLE_VENDOR_NUMBER }}
-          APPLE_APP_SKU: ${{ secrets.APPLE_APP_SKU }}
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-sa-key.json
-          GOOGLE_PACKAGE_NAME: ${{ secrets.GOOGLE_PACKAGE_NAME }}
-          GOOGLE_BUCKET_ID: ${{ secrets.GOOGLE_BUCKET_ID }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m src.main
-
-      # Independent of the download report: a revenue failure never blocks
-      # downloads (and vice-versa). Needs HUAWEI_* secrets for the Huawei line;
-      # without them the report still goes out with Apple + Google.
-      - name: Run daily revenue report
-        if: always()
+      - name: Build and send monthly revenue PDF
         env:
           APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
           APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
@@ -83,22 +66,30 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           REVENUE_TELEGRAM_CHAT_ID: ${{ secrets.REVENUE_TELEGRAM_CHAT_ID }}
-        run: python -m src.revenue.main daily
+        run: |
+          if [ -n "${{ inputs.month }}" ]; then
+            python -m src.revenue.main monthly --month "${{ inputs.month }}" --out reports
+          else
+            python -m src.revenue.main monthly --out reports
+          fi
 
-      - name: Commit download + revenue history
+      - name: Upload PDF as workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: revenue-pdf
+          path: reports/*.pdf
+          if-no-files-found: ignore
+          retention-days: 400
+
+      - name: Commit revenue history
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash || true
           git add data/
-          git diff --cached --quiet || git commit -m "chore: update download & revenue history" && git push
-
-      - name: Save cumulative totals cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: cumulative_totals.json
-          key: cumulative-totals-${{ github.ref }}-${{ github.run_id }}
+          git diff --cached --quiet || git commit -m "chore: update monthly revenue history" && git push
 
       - name: Clean up credentials
         if: always()
