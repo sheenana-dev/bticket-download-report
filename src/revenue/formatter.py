@@ -59,13 +59,23 @@ def format_daily(results: list[RevenueResult], report_time: datetime, mtd: dict[
             en.append(f"   {st_en}")
             jp.append(f"   {st_jp}")
         else:
-            txn = f" · {r.transactions} txn" if r.transactions else ""
-            rf = f" · {r.refunds} refund" if r.refunds else ""
-            en.append(f"   Gross: {money(r.gross, ccy)} | Net: {money(r.net, ccy)}{txn}{rf}")
-            jp.append(f"   総額: {money(r.gross, ccy)} | 純額: {money(r.net, ccy)}{txn.replace('txn', '件')}{rf.replace('refund', '返金')}")
+            en_bits = []
+            jp_bits = []
+            if r.transactions:
+                en_bits.append(f"{r.transactions} paid"); jp_bits.append(f"有料 {r.transactions} 件")
+            if r.trials:
+                en_bits.append(f"{r.trials} trial"); jp_bits.append(f"トライアル {r.trials} 件")
+            if r.refunds:
+                en_bits.append(f"{r.refunds} refund"); jp_bits.append(f"返金 {r.refunds} 件")
+            en_tail = (" · " + ", ".join(en_bits)) if en_bits else ""
+            jp_tail = (" · " + "・".join(jp_bits)) if jp_bits else ""
+            en.append(f"   Gross: {money(r.gross, ccy)} | Net: {money(r.net, ccy)}{en_tail}")
+            jp.append(f"   総額: {money(r.gross, ccy)} | 純額: {money(r.net, ccy)}{jp_tail}")
         if m:
-            en.append(f"   MTD: {money(m['gross'], ccy)} gross | {money(m['net'], ccy)} net")
-            jp.append(f"   月初来: 総額 {money(m['gross'], ccy)} | 純額 {money(m['net'], ccy)}")
+            mt = f" · {m['trials']} trial" if m.get("trials") else ""
+            mt_jp = f" · トライアル {m['trials']} 件" if m.get("trials") else ""
+            en.append(f"   MTD: {money(m['gross'], ccy)} gross | {money(m['net'], ccy)} net{mt}")
+            jp.append(f"   月初来: 総額 {money(m['gross'], ccy)} | 純額 {money(m['net'], ccy)}{mt_jp}")
         en.append("")
         jp.append("")
 
@@ -80,8 +90,9 @@ def format_daily(results: list[RevenueResult], report_time: datetime, mtd: dict[
         "",
         "Note: Google Play & Huawei net are",
         "estimates (fee applied by rate).",
-        "Reconciled figures come in the",
-        "monthly PDF.",
+        "Trial = free-trial/intro starts (no",
+        "revenue yet). Reconciled figures",
+        "come in the monthly PDF.",
     ]
     jp += [
         bar,
@@ -93,6 +104,7 @@ def format_daily(results: list[RevenueResult], report_time: datetime, mtd: dict[
         "",
         "注: Google Play・Huaweiの純額は",
         "手数料率による推定値です。",
+        "トライアル＝無料体験開始（売上なし）。",
         "確定値は月次PDFを",
         "ご確認ください。",
     ]

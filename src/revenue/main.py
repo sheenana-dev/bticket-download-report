@@ -179,7 +179,7 @@ def run_monthly(config: AppConfig, now: datetime, month: Optional[str], out_dir:
         results[i] = RevenueResult(
             store_name=r.store_name, period_start=m_start, period_end=m_end,
             gross=round(t["gross"], 2), net=round(t["net"], 2),
-            transactions=t["transactions"], refunds=t["refunds"], basis="estimate",
+            transactions=t["transactions"], refunds=t["refunds"], trials=t.get("trials", 0), basis="estimate",
             note=f"{r.note or 'reconciled report not published yet'} — sum of {t['days']} daily estimate rows",
         )
         logger.info("%s: monthly report not published; using daily estimate sum", r.store_name)

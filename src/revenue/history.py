@@ -22,7 +22,7 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__
 DAILY_PATH = os.path.join(DATA_DIR, "revenue.csv")
 MONTHLY_PATH = os.path.join(DATA_DIR, "revenue_monthly.csv")
 
-DAILY_HEADERS = ["fetched_on", "report_date", "platform", "gross", "net", "transactions", "refunds", "basis", "native_gross"]
+DAILY_HEADERS = ["fetched_on", "report_date", "platform", "gross", "net", "transactions", "refunds", "trials", "basis", "native_gross"]
 MONTHLY_HEADERS = ["fetched_on", "month", "platform", "gross", "net", "transactions", "refunds", "basis", "note"]
 
 PLATFORM_KEY = {"App Store": "appstore", "Google Play": "googleplay", "Huawei": "huawei"}
@@ -76,6 +76,7 @@ def upsert_daily(results: list[RevenueResult], fetched_on: Optional[date] = None
             "net": f"{(r.net if r.net is not None else 0.0):.2f}",
             "transactions": str(r.transactions or 0),
             "refunds": str(r.refunds or 0),
+            "trials": str(r.trials or 0),
             "basis": r.basis,
             "native_gross": _native_str(r.native_gross),
         }
@@ -142,6 +143,7 @@ def daily_rows(path: str = DAILY_PATH) -> list[dict]:
                 "net": float(r["net"]),
                 "transactions": int(r.get("transactions") or 0),
                 "refunds": int(r.get("refunds") or 0),
+                "trials": int(r.get("trials") or 0),
             })
         except (KeyError, ValueError):
             continue
@@ -153,11 +155,12 @@ def period_totals(start: date, end: date, path: str = DAILY_PATH) -> dict[str, d
     totals: dict[str, dict] = {}
     for r in daily_rows(path):
         if start <= r["report_date"] <= end:
-            t = totals.setdefault(r["platform"], {"gross": 0.0, "net": 0.0, "transactions": 0, "refunds": 0, "days": 0})
+            t = totals.setdefault(r["platform"], {"gross": 0.0, "net": 0.0, "transactions": 0, "refunds": 0, "trials": 0, "days": 0})
             t["gross"] += r["gross"]
             t["net"] += r["net"]
             t["transactions"] += r["transactions"]
             t["refunds"] += r["refunds"]
+            t["trials"] += r["trials"]
             t["days"] += 1
     return totals
 
