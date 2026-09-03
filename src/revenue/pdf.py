@@ -139,7 +139,8 @@ L = {
         "page": "Page {n} · English",
         "kpi": ("NET REVENUE", "GROSS BILLINGS", "TRANSACTIONS", "STORES REPORTING"),
         "delta": "{arrow} {pct:+.1f}% vs prior month", "no_prev": "no prior month on file",
-        "take": "take-home {pct:.0f}%", "refunds_n": "{n:,} refunds", "all_ok": "all sources OK",
+        "take": "take-home {pct:.0f}%", "refunds_n": "{n:,} refunds · {t:,} trial starts", "all_ok": "all sources OK",
+        "trials_note": " · {n} trial starts",
         "summary_h": "Executive summary",
         "recon_h": "Reconciliation by store", "daily_h": "Daily net revenue", "trend_h": "Six-month trend (net)", "method_h": "Methodology",
         "store_head": ("Store", "Gross", "Net", "Txns", "Refunds", "Basis", "Notes"),
@@ -164,7 +165,8 @@ L = {
         "page": "{n} ページ · 日本語",
         "kpi": ("純売上", "総売上", "取引件数", "報告ストア数"),
         "delta": "{arrow} 前月比 {pct:+.1f}%", "no_prev": "前月データなし",
-        "take": "手取り率 {pct:.0f}%", "refunds_n": "返金 {n:,} 件", "all_ok": "全ソース正常",
+        "take": "手取り率 {pct:.0f}%", "refunds_n": "返金 {n:,} 件 · トライアル {t:,} 件", "all_ok": "全ソース正常",
+        "trials_note": " · トライアル {n} 件",
         "summary_h": "エグゼクティブサマリー",
         "recon_h": "ストア別照合", "daily_h": "日次純売上", "trend_h": "6か月推移（純額）", "method_h": "算出方法",
         "store_head": ("ストア", "総額", "純額", "件数", "返金", "基準", "備考"),
@@ -216,6 +218,7 @@ def _kpi_tiles(results: list[RevenueResult], prev_net: Optional[float], ccy: str
     gross = sum(r.gross or 0 for r in results if r.ok)
     txns = sum(r.transactions or 0 for r in results if r.ok)
     refunds = sum(r.refunds or 0 for r in results if r.ok)
+    trials = sum(r.trials or 0 for r in results if r.ok)
     take = (net / gross * 100) if gross else 0.0
     if prev_net:
         delta = (net - prev_net) / prev_net * 100
@@ -230,7 +233,7 @@ def _kpi_tiles(results: list[RevenueResult], prev_net: Optional[float], ccy: str
     data = [[
         tile(k[0], money(net, ccy), delta_txt),
         tile(k[1], money(gross, ccy), t["take"].format(pct=take)),
-        tile(k[2], f"{txns:,}", t["refunds_n"].format(n=refunds)),
+        tile(k[2], f"{txns:,}", t["refunds_n"].format(n=refunds, t=trials)),
         tile(k[3], f"{sum(1 for r in results if r.ok)}/{len(results)}",
              ", ".join(r.store_name for r in results if not r.ok) or t["all_ok"]),
     ]]
@@ -270,7 +273,8 @@ def _store_table(results: list[RevenueResult], ccy: str, st: dict, lang: str = "
                 Paragraph(f"{r.transactions or 0:,}", st["cell_r"]),
                 Paragraph(f"{r.refunds or 0:,}", st["cell_r"]),
                 Paragraph(t["reconciled"] if r.basis == "reconciled" else t["estimate"], ls["cell"]),
-                Paragraph((r.note or "") + _native_note(r.native_gross), st["muted"]),
+                Paragraph((r.note or "") + _native_note(r.native_gross)
+                          + (t["trials_note"].format(n=r.trials) if r.trials else ""), st["muted"] if lang == "en" else ls["muted"]),
             ])
         else:
             rows.append([

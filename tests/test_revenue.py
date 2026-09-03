@@ -39,6 +39,8 @@ def test_apple_counts_only_iap_rows_for_our_app(apple_config):
     tsv = _apple_tsv([
         # free download — not revenue
         {"SKU": "com.bticket.app", "Product Type Identifier": "1F", "Units": "12", "Developer Proceeds": "0", "Customer Price": "0", "Customer Currency": "PHP", "Currency of Proceeds": "PHP"},
+        # two free-trial starts — trials, not paid txns
+        {"SKU": "premium.monthly", "Parent Identifier": "com.bticket.app", "Product Type Identifier": "IAY", "Units": "2", "Developer Proceeds": "0", "Customer Price": "0", "Customer Currency": "PHP", "Currency of Proceeds": "PHP"},
         # subscription, 3 units, PHP
         {"SKU": "premium.monthly", "Parent Identifier": "com.bticket.app", "Product Type Identifier": "IAY", "Units": "3", "Developer Proceeds": "127.5", "Customer Price": "150", "Customer Currency": "PHP", "Currency of Proceeds": "PHP"},
         # refund of 1 unit in USD
@@ -47,7 +49,7 @@ def test_apple_counts_only_iap_rows_for_our_app(apple_config):
         {"SKU": "other.sub", "Parent Identifier": "com.other.app", "Product Type Identifier": "IAY", "Units": "99", "Developer Proceeds": "100", "Customer Price": "100", "Customer Currency": "PHP", "Currency of Proceeds": "PHP"},
     ])
     r = AppleRevenueClient(apple_config, FX).parse_tsv(tsv, date(2026, 9, 1))
-    assert r.transactions == 3 and r.refunds == 1
+    assert r.transactions == 3 and r.refunds == 1 and r.trials == 2
     assert r.gross == pytest.approx(450 - 2.99 * 56, abs=0.01)
     assert r.net == pytest.approx(382.5 - 2.55 * 56, abs=0.01)
     assert r.native_gross == {"PHP": 450.0, "USD": -2.99}
@@ -196,9 +198,11 @@ def test_daily_message_is_bilingual_and_under_telegram_limit():
         RevenueResult("Huawei", date(2026, 9, 2), date(2026, 9, 2), error_message="500"),
     ]
     mtd = {"appstore": {"gross": 3000.0, "net": 2550.0, "transactions": 20, "refunds": 0, "days": 2}}
+    results[0].trials = 2
     msg = format_daily(results, now, mtd, data_date=date(2026, 9, 2))
     assert msg.startswith("<pre>") and msg.endswith("</pre>")
     assert "₱1,275" in msg and "MTD: ₱3,000 gross" in msg
+    assert "10 paid, 2 trial" in msg and "有料 10 件・トライアル 2 件" in msg
     assert "⏳ no Play sales export" in msg and "⚠️ Unavailable" in msg
     assert "日次売上レポート" in msg and "取得不可" in msg
     assert len(msg) < 4096

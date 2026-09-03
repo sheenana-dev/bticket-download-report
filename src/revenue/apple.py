@@ -105,6 +105,7 @@ class AppleRevenueClient(BaseRevenueClient):
         net = 0.0
         txns = 0
         refunds = 0
+        trials = 0
         native: dict = {}
 
         for row in reader:
@@ -123,7 +124,9 @@ class AppleRevenueClient(BaseRevenueClient):
             net += self.fx.convert(row_net_native, proc_ccy, fx_day)
             native[cust_ccy] = native.get(cust_ccy, 0.0) + row_gross_native
 
-            if units > 0:
+            if units > 0 and cust_price == 0:
+                trials += units          # free trial / intro-offer start
+            elif units > 0:
                 txns += units
             elif units < 0:
                 refunds += -units
@@ -141,6 +144,7 @@ class AppleRevenueClient(BaseRevenueClient):
             net=round(net, 2),
             transactions=txns,
             refunds=refunds,
+            trials=trials,
             native_gross={k: round(v, 2) for k, v in native.items()},
         )
 

@@ -15,8 +15,10 @@ class RevenueResult:
     # store collected). Net = what the store owes us. Both in report currency.
     gross: Optional[float] = None
     net: Optional[float] = None
-    transactions: Optional[int] = None
+    transactions: Optional[int] = None   # paid units
     refunds: Optional[int] = None
+    # Zero-price starts (free trials / intro offers). Leading indicator, not revenue.
+    trials: int = 0
     # "estimate" (daily, fee applied by rate) or "reconciled" (store-reported net)
     basis: str = "estimate"
     # Original currencies seen, e.g. {"USD": 12.5, "PHP": 1800.0} (gross, native)

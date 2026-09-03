@@ -108,7 +108,7 @@ class GooglePlayRevenueClient(BaseRevenueClient):
         reader = csv.DictReader(io.StringIO(text))
         target = target_date.isoformat()
         gross = tax = 0.0
-        txns = refunds = 0
+        txns = refunds = trials = 0
         native: dict = {}
 
         for row in reader:
@@ -119,6 +119,9 @@ class GooglePlayRevenueClient(BaseRevenueClient):
             ccy = _col(row, "Currency of Sale") or "PHP"
             amount = _money(_col(row, "Charged Amount"))
             tax_amt = _money(_col(row, "Taxes Collected"))
+            if status == "charged" and amount == 0:
+                trials += 1              # free-trial start: order exists, nothing charged
+                continue
             if status == "charged":
                 txns += 1
                 sign = 1.0
@@ -140,6 +143,7 @@ class GooglePlayRevenueClient(BaseRevenueClient):
             net=round(net, 2),
             transactions=txns,
             refunds=refunds,
+            trials=trials,
             basis="estimate",
             native_gross={k: round(v, 2) for k, v in native.items()},
             note=f"net est. at {self.revenue.google_fee_rate:.0%} fee",
