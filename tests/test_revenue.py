@@ -150,11 +150,11 @@ def test_google_earnings_month_reconciles_ledger(google_play_config):
 # ----------------------------------------------------------------------- huawei
 def test_huawei_parses_configured_columns_and_converts(huawei_config):
     c = HuaweiRevenueClient(huawei_config, REV, FX)
-    text = "Date,Paid orders,Paid amount,Paying users\n20260901,4,120.00,3\n20260902,1,30.00,1\n"
+    text = "Date,Paying users,Payment amount(USD),Payment times,New paying users\n20260901,3,120.00,4,1\n20260902,1,30.00,1,0\n"
     r = c.parse_csv(text, date(2026, 9, 1), date(2026, 9, 1), date(2026, 9, 1))
     assert r.ok and r.transactions == 4
-    assert r.gross == pytest.approx(120 * 7.8) and r.net == pytest.approx(120 * 7.8 * 0.85)
-    assert r.native_gross == {"CNY": 120.0}
+    assert r.gross == pytest.approx(120 * 56.0) and r.net == pytest.approx(120 * 56.0 * 0.85)
+    assert r.native_gross == {"USD": 120.0}
 
     bad = c.parse_csv("Date,Something\n20260901,1\n", date(2026, 9, 1), date(2026, 9, 1), date(2026, 9, 1))
     assert bad.error_message and "HUAWEI_IAP_AMOUNT_COLUMN" in bad.error_message

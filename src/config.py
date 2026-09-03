@@ -52,12 +52,14 @@ class RevenueConfig:
     # because Huawei's docs are region-inconsistent; `--probe huawei` prints the
     # raw response so the right path/columns can be pinned quickly.
     huawei_iap_report_path: str = (
-        "/api/report/distribution-operation-quality/v1/IAPReportExport/{app_id}"
+        "/api/report/distribution-operation-quality/v1/IAPExport/{app_id}"
     )
     # CSV column carrying the paid amount in Huawei's export.
-    huawei_amount_column: str = "Paid amount"
-    huawei_count_column: str = "Paid orders"
-    huawei_currency: str = "CNY"
+    huawei_amount_column: str = "Payment amount"
+    huawei_count_column: str = "Payment times"
+    huawei_currency: str = "USD"
+    # AGC team/developer ID — required `uid` header on report APIs (undocumented).
+    huawei_uid: str = ""
     # Optional fixed FX overrides, e.g. "USD:56.2,JPY:0.38". Anything not listed
     # is fetched live from the FX provider and cached for the day.
     fx_overrides: dict = field(default_factory=dict)
@@ -117,6 +119,7 @@ def _load_revenue() -> RevenueConfig:
         huawei_amount_column=env.get("HUAWEI_IAP_AMOUNT_COLUMN", "").strip() or defaults.huawei_amount_column,
         huawei_count_column=env.get("HUAWEI_IAP_COUNT_COLUMN", "").strip() or defaults.huawei_count_column,
         huawei_currency=env.get("HUAWEI_IAP_CURRENCY", "").strip().upper() or defaults.huawei_currency,
+        huawei_uid=env.get("HUAWEI_UID", "").strip(),
         fx_overrides=_parse_fx_overrides(env.get("REVENUE_FX_OVERRIDES", "")),
         chat_id=env.get("REVENUE_TELEGRAM_CHAT_ID", "").strip() or None,
     )

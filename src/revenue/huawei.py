@@ -71,14 +71,24 @@ class HuaweiRevenueClient(BaseRevenueClient):
                 "startTime": start.strftime("%Y%m%d"),
                 "endTime": end.strftime("%Y%m%d"),
                 "groupBy": "date",
+                "timeType": "day",
+                "currency": self.revenue.huawei_currency,
                 "exportType": "CSV",
             },
-            headers={"Authorization": f"Bearer {self._token}", "client_id": self.config.client_id},
+            headers={
+                "Authorization": f"Bearer {self._token}",
+                "client_id": self.config.client_id,
+                # Team/developer ID. Without it the report service answers 403
+                # "client token authorization fail" regardless of client role.
+                "uid": self.revenue.huawei_uid,
+            },
             timeout=30,
         )
         if resp.status_code >= 500:
             raise requests.RequestException(f"Server error: {resp.status_code}")
-        resp.raise_for_status()
+        if 400 <= resp.status_code < 500:
+            # Not retryable — surface immediately instead of 3x backoff.
+            raise ValueError(f"Huawei {resp.status_code}: {resp.text[:200]} (check HUAWEI_UID / client / app id)")
         data = resp.json()
         if data.get("ret", {}).get("code") != 0:
             raise ValueError(f"Huawei API error: {data.get('ret')}")
