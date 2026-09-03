@@ -1,0 +1,4 @@
+fetched_on,month,platform,gross,net,transactions,refunds,basis,note
+2026-09-03,2026-08,appstore,396.00,316.44,7,0,reconciled,
+2026-09-03,2026-08,googleplay,99.00,84.15,1,0,estimate,Play earnings report not published yet (usually ~5th) — sum of 31 daily estimate rows
+2026-09-03,2026-08,huawei,98.84,84.01,1,0,estimate,net est. at 15% fee

@@ -36,7 +36,7 @@ from src.revenue.formatter import format_daily, format_monthly_caption
 from src.revenue.fx import FxConverter
 from src.revenue.google_play import GooglePlayRevenueClient
 from src.revenue.history import (
-    daily_rows, monthly_rows, period_totals, upsert_daily, upsert_monthly,
+    PLATFORM_KEY, daily_rows, monthly_rows, period_totals, upsert_daily, upsert_monthly,
 )
 from src.revenue.huawei import HuaweiRevenueClient
 from src.revenue.models import RevenueResult
@@ -160,6 +160,30 @@ def run_monthly(config: AppConfig, now: datetime, month: Optional[str], out_dir:
             logger.warning("Daily backfill for month failed (non-fatal): %s", e)
 
     results = [c.fetch_month(year, mon) for c in clients]
+
+    # A store whose reconciled report isn't published yet (Google's ledger lands
+    # ~5th, Apple's monthly a few days in) would otherwise show "Unavailable" and
+    # drop out of the totals — while the daily chart below still shows its sales.
+    # Fall back to the sum of that store's daily estimate rows, clearly labelled,
+    # so the month total is complete; the next run swaps in the reconciled figure.
+    from calendar import monthrange
+    m_start, m_end = date(year, mon, 1), date(year, mon, monthrange(year, mon)[1])
+    totals = period_totals(m_start, m_end)
+    for i, r in enumerate(results):
+        if r.ok or r.error_message:
+            continue
+        key = PLATFORM_KEY.get(r.store_name)
+        t = totals.get(key)
+        if not t or not t["days"]:
+            continue
+        results[i] = RevenueResult(
+            store_name=r.store_name, period_start=m_start, period_end=m_end,
+            gross=round(t["gross"], 2), net=round(t["net"], 2),
+            transactions=t["transactions"], refunds=t["refunds"], basis="estimate",
+            note=f"{r.note or 'reconciled report not published yet'} — sum of {t['days']} daily estimate rows",
+        )
+        logger.info("%s: monthly report not published; using daily estimate sum", r.store_name)
+
     try:
         upsert_monthly(results, fetched_on=now.date())
     except Exception as e:  # noqa: BLE001
