@@ -115,9 +115,17 @@ class HuaweiRevenueClient(BaseRevenueClient):
                 return k
         return None
 
+    def _zero(self, start: date, end: date) -> RevenueResult:
+        """A successful export with no rows means no sales — report ₱0, like the other stores."""
+        return RevenueResult(
+            store_name=self.store_name, period_start=start, period_end=end,
+            gross=0.0, net=0.0, transactions=0, refunds=0, basis="estimate",
+            native_gross={}, note="no sales",
+        )
+
     def parse_csv(self, text: str, start: date, end: date, fx_day: date) -> RevenueResult:
         if not text.strip():
-            return RevenueResult(self.store_name, start, end, note="no Huawei IAP data for period")
+            return self._zero(start, end)
         reader = csv.DictReader(io.StringIO(text))
         gross_native = 0.0
         count = 0
@@ -144,7 +152,7 @@ class HuaweiRevenueClient(BaseRevenueClient):
                 count += int(self._num(row.get(count_col)))
 
         if not matched:
-            return RevenueResult(self.store_name, start, end, note="no Huawei IAP rows for period")
+            return self._zero(start, end)
 
         ccy = self.revenue.huawei_currency
         gross = self.fx.convert(gross_native, ccy, fx_day)

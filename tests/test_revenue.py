@@ -160,7 +160,7 @@ def test_huawei_parses_configured_columns_and_converts(huawei_config):
     assert bad.error_message and "HUAWEI_IAP_AMOUNT_COLUMN" in bad.error_message
 
     empty = c.parse_csv("", date(2026, 9, 1), date(2026, 9, 1), date(2026, 9, 1))
-    assert not empty.ok and empty.error_message is None
+    assert empty.ok and empty.gross == 0 and empty.transactions == 0  # no export rows == no sales, not "unavailable"
 
 
 # ---------------------------------------------------------------------- history
