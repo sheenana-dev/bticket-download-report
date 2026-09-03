@@ -65,4 +65,5 @@ fetched_on,report_date,platform,gross,net,transactions,refunds,basis,native_gros
 2026-09-03,2026-08-31,googleplay,0.00,0.00,0,0,estimate,
 2026-09-03,2026-09-01,appstore,99.00,85.74,3,0,estimate,PHP:99.00;USD:0.00
 2026-09-03,2026-09-01,googleplay,0.00,0.00,0,0,estimate,
+2026-09-03,2026-09-02,appstore,0.00,0.00,2,0,estimate,PHP:0.00
 2026-09-03,2026-09-02,googleplay,99.00,84.15,1,0,estimate,PHP:99.00
