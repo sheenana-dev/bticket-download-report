@@ -66,6 +66,9 @@ class RevenueConfig:
     # Where daily revenue Telegram summaries go. Defaults to the download
     # report's chat if unset.
     chat_id: Optional[str] = None
+    # Where the monthly PDF goes (e.g. the CEO's private chat). Comma-separated
+    # for several recipients. Falls back to chat_id, then the download chat.
+    monthly_chat_ids: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -122,6 +125,9 @@ def _load_revenue() -> RevenueConfig:
         huawei_uid=env.get("HUAWEI_UID", "").strip(),
         fx_overrides=_parse_fx_overrides(env.get("REVENUE_FX_OVERRIDES", "")),
         chat_id=env.get("REVENUE_TELEGRAM_CHAT_ID", "").strip() or None,
+        monthly_chat_ids=tuple(
+            c.strip() for c in env.get("REVENUE_MONTHLY_CHAT_ID", "").split(",") if c.strip()
+        ),
     )
 
 

@@ -67,6 +67,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           REVENUE_TELEGRAM_CHAT_ID: ${{ secrets.REVENUE_TELEGRAM_CHAT_ID }}
+          REVENUE_MONTHLY_CHAT_ID: ${{ secrets.REVENUE_MONTHLY_CHAT_ID }}
         run: |
           if [ -n "${{ inputs.month }}" ]; then
             python -m src.revenue.main monthly --month "${{ inputs.month }}" --out reports

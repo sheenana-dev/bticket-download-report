@@ -203,9 +203,15 @@ def run_monthly(config: AppConfig, now: datetime, month: Optional[str], out_dir:
     logger.info("Caption:\n%s", caption)
 
     if dry_run:
-        logger.info("Dry run — skipping Telegram send")
+        logger.info("Dry run — skipping Telegram send (would go to %s)",
+                    ", ".join(config.revenue.monthly_chat_ids) or config.revenue.chat_id or config.telegram.chat_id)
         return 0
-    ok = send_telegram_document(config.telegram, pdf_path, caption, chat_id=config.revenue.chat_id)
+    # Monthly PDF goes to REVENUE_MONTHLY_CHAT_ID (e.g. the CEO directly); if that
+    # is unset it follows the daily revenue chat, then the download chat.
+    recipients = list(config.revenue.monthly_chat_ids) or [config.revenue.chat_id or config.telegram.chat_id]
+    ok = True
+    for chat in recipients:
+        ok = send_telegram_document(config.telegram, pdf_path, caption, chat_id=chat) and ok
     return 0 if ok else 1
 
 

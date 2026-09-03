@@ -9,7 +9,7 @@ config, Telegram and retry code with the download report.
 | | Daily estimate | Monthly reconciled |
 |---|---|---|
 | Runs | every day with the download report (`daily_report.yml`) | 6th of month 09:07 PHT (`monthly_revenue.yml`) |
-| Output | bilingual Telegram text | one-page PDF (EN + JP exec summary) + Telegram caption |
+| Output | bilingual Telegram text → download group | 2-page PDF (EN page, JA page) + caption → `REVENUE_MONTHLY_CHAT_ID` (CEO chat) |
 | Apple | Sales report DAILY — `Developer Proceeds × Units` is real net | Sales report MONTHLY — Apple's own roll-up |
 | Google | estimated sales report — net = (charged − tax) × (1 − fee) | earnings report ledger — real fee/tax/refund lines = payout |
 | Huawei | IAP export × (1 − fee) | same (Huawei exposes no ledger) — flagged "Estimate" in the PDF |
@@ -52,8 +52,15 @@ python -m src.revenue.main probe   apple|google|huawei  # dump raw export header
    Set `HUAWEI_UID`; defaults for path/columns/currency already match the
    real export. `probe huawei --date <a day with a sale>` prints the CSV.
 4. **GitHub** — add secrets `HUAWEI_CLIENT_ID`, `HUAWEI_CLIENT_SECRET`,
-   `HUAWEI_APP_ID`, `HUAWEI_UID` (optional `REVENUE_TELEGRAM_CHAT_ID` for a
-   finance-only group) and repo *variables* for any `REVENUE_*` overrides.
+   `HUAWEI_APP_ID`, `HUAWEI_UID`, and `REVENUE_MONTHLY_CHAT_ID` (the private
+   chat the monthly PDF goes to — see below). Optional
+   `REVENUE_TELEGRAM_CHAT_ID` moves the daily text off the download group.
+   Repo *variables* hold any `REVENUE_*` fee/FX overrides.
+
+   **Getting a private chat id**: Telegram bots cannot message a person
+   first. The recipient opens the bot and sends `/start`; then
+   `curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getUpdates" | grep -o '"chat":{"id":[0-9-]*'`
+   shows their id (positive number for a person, negative for a group).
 5. Trigger `Monthly Revenue Report (PDF)` manually with `month=2026-08` to get
    the first PDF and seed `revenue_monthly.csv` (MoM needs two months).
 
