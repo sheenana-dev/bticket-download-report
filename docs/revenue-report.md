@@ -39,14 +39,21 @@ python -m src.revenue.main probe   apple|google|huawei  # dump raw export header
 2. **Google** — the service account already reads `stats/installs/`; it needs
    read on `sales/` and `earnings/` in the same bucket (Play Console → Users &
    permissions → *View financial data*). `probe google` prints both.
-3. **Huawei** — run `probe huawei`. If it 404s, the export path differs for
-   your region: check AppGallery Connect → Reports → In-app payment report →
-   API reference and set `HUAWEI_IAP_REPORT_PATH`. Then set
-   `HUAWEI_IAP_AMOUNT_COLUMN` / `HUAWEI_IAP_COUNT_COLUMN` to the exact CSV
-   headers you see, and `HUAWEI_IAP_CURRENCY` (settlement currency).
+3. **Huawei** — three things Huawei's public docs get wrong or omit (verified
+   via the AGC API Explorer, Sep 2026):
+   - endpoint is `.../v1/IAPExport/{appId}` and needs `currency`, `timeType`,
+     `exportType` query params;
+   - a `uid` header carrying the **Developer ID** (Users and permissions →
+     Personal information) is mandatory — without it every call is
+     `403 client token authorization fail`, whatever the client's role;
+   - it only works with a **team-level** API client (Project = N/A), not a
+     project-scoped one. `HUAWEI_APP_ID` must be the *live* app's ID
+     (Apps → app → App information), not an old draft's.
+   Set `HUAWEI_UID`; defaults for path/columns/currency already match the
+   real export. `probe huawei --date <a day with a sale>` prints the CSV.
 4. **GitHub** — add secrets `HUAWEI_CLIENT_ID`, `HUAWEI_CLIENT_SECRET`,
-   `HUAWEI_APP_ID` (optional `REVENUE_TELEGRAM_CHAT_ID` for a finance-only
-   group) and repo *variables* for any `HUAWEI_IAP_*` / `REVENUE_*` overrides.
+   `HUAWEI_APP_ID`, `HUAWEI_UID` (optional `REVENUE_TELEGRAM_CHAT_ID` for a
+   finance-only group) and repo *variables* for any `REVENUE_*` overrides.
 5. Trigger `Monthly Revenue Report (PDF)` manually with `month=2026-08` to get
    the first PDF and seed `revenue_monthly.csv` (MoM needs two months).
 
@@ -59,7 +66,12 @@ daily estimate will run slightly high — the monthly PDF is the number to quote
 
 ## Fonts (PDF)
 
-Poppins-Bold (brand) is bundled in `assets/fonts/`. Numbers use DejaVu Sans
-(Helvetica has no ₱). Japanese uses IPA Gothic, installed on the runner via
-`apt`; without it the PDF falls back to reportlab's built-in CID font, which
-renders in Preview/Telegram but not in every viewer.
+Poppins-Bold (brand) and DejaVu Sans (numbers — Helvetica has no ₱ glyph)
+are bundled in `assets/fonts/`, so the PDF renders identically on a Mac and
+on the runner. Japanese uses IPA Gothic, installed on the runner via `apt`;
+without it the PDF falls back to reportlab's built-in CID font, which renders
+in Preview/Telegram but not in every viewer.
+
+`monthly` also back-fills every day of its month into `data/revenue.csv`
+(skip with `--skip-daily-backfill`) so the daily chart is populated from the
+first PDF.

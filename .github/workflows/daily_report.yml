@@ -73,6 +73,7 @@ jobs:
           HUAWEI_CLIENT_ID: ${{ secrets.HUAWEI_CLIENT_ID }}
           HUAWEI_CLIENT_SECRET: ${{ secrets.HUAWEI_CLIENT_SECRET }}
           HUAWEI_APP_ID: ${{ secrets.HUAWEI_APP_ID }}
+          HUAWEI_UID: ${{ secrets.HUAWEI_UID }}
           HUAWEI_IAP_REPORT_PATH: ${{ vars.HUAWEI_IAP_REPORT_PATH }}
           HUAWEI_IAP_AMOUNT_COLUMN: ${{ vars.HUAWEI_IAP_AMOUNT_COLUMN }}
           HUAWEI_IAP_COUNT_COLUMN: ${{ vars.HUAWEI_IAP_COUNT_COLUMN }}

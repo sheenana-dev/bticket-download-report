@@ -77,8 +77,14 @@ def run_daily(config: AppConfig, now: datetime, target: Optional[date], dry_run:
         results.append(c.fetch_daily(target))
 
     # Self-heal: refresh the trailing week so late exports/revisions land.
+    # A store whose target-day fetch errored (auth, network) is skipped — no
+    # point burning 7 more retry cycles against a dead endpoint.
     backfill: list[RevenueResult] = []
+    dead = {r.store_name for r in results if r.error_message}
     for c in clients:
+        if c.store_name in dead:
+            logger.warning("%s errored on target day — skipping backfill", c.store_name)
+            continue
         for back in range(1, BACKFILL_DAYS + 1):
             d = target - timedelta(days=back)
             try:
@@ -108,7 +114,35 @@ def run_daily(config: AppConfig, now: datetime, target: Optional[date], dry_run:
 
 
 # ------------------------------------------------------------------------- monthly
-def run_monthly(config: AppConfig, now: datetime, month: Optional[str], out_dir: str, dry_run: bool) -> int:
+def backfill_month_daily(clients: list, year: int, month: int, now: datetime) -> int:
+    """Fetch every day of the month per store into data/revenue.csv.
+
+    Makes the PDF's daily chart meaningful from the first run and seeds the
+    history the daily job then keeps current. Apple = one request per day
+    (well inside the ~200/hr limit); Google reuses the cached monthly zip;
+    Huawei is one range call per day.
+    """
+    from calendar import monthrange
+    rows: list[RevenueResult] = []
+    last = min(date(year, month, monthrange(year, month)[1]), now.date() - timedelta(days=1))
+    for c in clients:
+        d = date(year, month, 1)
+        failures = 0
+        while d <= last:
+            r = c.fetch_daily(d)
+            if r.ok:
+                rows.append(r)
+            elif r.error_message:
+                failures += 1
+                if failures >= 3:
+                    logger.warning("%s: 3 errors during month backfill — stopping", c.store_name)
+                    break
+            d += timedelta(days=1)
+    return upsert_daily(rows, fetched_on=now.date())
+
+
+def run_monthly(config: AppConfig, now: datetime, month: Optional[str], out_dir: str, dry_run: bool,
+                daily_backfill: bool = True) -> int:
     if month:
         year, mon = (int(x) for x in month.split("-"))
     else:
@@ -117,6 +151,13 @@ def run_monthly(config: AppConfig, now: datetime, month: Optional[str], out_dir:
     fx = FxConverter(ccy, config.revenue.fx_overrides)
     clients = _clients(config, fx)
     logger.info("Revenue monthly — %04d-%02d", year, mon)
+
+    if daily_backfill:
+        try:
+            n = backfill_month_daily(clients, year, mon, now)
+            logger.info("Month daily backfill: %d row(s) upserted", n)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Daily backfill for month failed (non-fatal): %s", e)
 
     results = [c.fetch_month(year, mon) for c in clients]
     try:
@@ -203,6 +244,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_month.add_argument("--month", help="YYYY-MM (default: previous month)")
     p_month.add_argument("--out", default="reports")
     p_month.add_argument("--dry-run", action="store_true")
+    p_month.add_argument("--skip-daily-backfill", action="store_true",
+                         help="don't (re)fetch each day of the month into data/revenue.csv")
 
     p_probe = sub.add_parser("probe")
     p_probe.add_argument("store", choices=["huawei", "apple", "google"])
@@ -223,7 +266,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         target = date.fromisoformat(args.date) if args.date else None
         return run_daily(config, now, target, args.dry_run)
     if args.cmd == "monthly":
-        return run_monthly(config, now, args.month, args.out, args.dry_run)
+        return run_monthly(config, now, args.month, args.out, args.dry_run,
+                           daily_backfill=not args.skip_daily_backfill)
     if args.cmd == "probe":
         target = date.fromisoformat(args.date) if args.date else (now - timedelta(days=3)).date()
         return run_probe(config, args.store, target)
