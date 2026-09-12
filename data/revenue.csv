@@ -122,3 +122,5 @@ fetched_on,report_date,platform,gross,net,transactions,refunds,trials,basis,nati
 2026-09-11,2026-09-10,appstore,0.00,0.00,0,0,0,estimate,
 2026-09-11,2026-09-10,googleplay,323.73,265.47,3,0,0,estimate,KRW:2700.00;PHP:198.00
 2026-09-11,2026-09-10,huawei,0.00,0.00,0,0,0,estimate,
+2026-09-12,2026-09-11,googleplay,0.00,0.00,0,0,0,estimate,
+2026-09-12,2026-09-11,huawei,0.00,0.00,0,0,0,estimate,
