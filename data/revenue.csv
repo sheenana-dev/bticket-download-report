@@ -154,4 +154,7 @@ fetched_on,report_date,platform,gross,net,transactions,refunds,trials,basis,nati
 2026-09-21,2026-09-20,huawei,0.00,0.00,0,0,0,estimate,
 2026-09-22,2026-09-21,appstore,0.00,0.00,0,0,0,estimate,
 2026-09-22,2026-09-21,googleplay,0.00,0.00,0,0,0,estimate,
-2026-09-22,2026-09-21,huawei,0.00,0.00,0,0,0,estimate,
+2026-09-23,2026-09-21,huawei,99.84,84.87,1,0,0,estimate,USD:1.59
+2026-09-23,2026-09-22,appstore,99.00,85.74,1,0,0,estimate,PHP:99.00
+2026-09-23,2026-09-22,googleplay,0.00,0.00,0,0,0,estimate,
+2026-09-23,2026-09-22,huawei,0.00,0.00,0,0,0,estimate,
