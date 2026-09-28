@@ -170,3 +170,8 @@ fetched_on,report_date,platform,gross,net,transactions,refunds,trials,basis,nati
 2026-09-27,2026-09-26,appstore,0.00,0.00,0,0,0,estimate,
 2026-09-27,2026-09-26,googleplay,0.00,0.00,0,0,0,estimate,
 2026-09-27,2026-09-26,huawei,0.00,0.00,0,0,0,estimate,
+2026-09-29,2026-09-27,appstore,0.00,0.00,0,0,0,estimate,
+2026-09-29,2026-09-27,googleplay,0.00,0.00,0,0,0,estimate,
+2026-09-29,2026-09-27,huawei,0.00,0.00,0,0,0,estimate,
+2026-09-29,2026-09-28,googleplay,0.00,0.00,0,0,0,estimate,
+2026-09-29,2026-09-28,huawei,0.00,0.00,0,0,0,estimate,
