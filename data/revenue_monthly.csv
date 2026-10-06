@@ -2,6 +2,6 @@ fetched_on,month,platform,gross,net,transactions,refunds,basis,note
 2026-09-06,2026-08,appstore,396.00,316.44,4,0,reconciled,
 2026-09-06,2026-08,googleplay,98.22,83.49,1,0,reconciled,fees -15 · tax 0 (USD ledger)
 2026-09-06,2026-08,huawei,98.84,84.01,1,0,estimate,net est. at 15% fee
-2026-10-05,2026-09,appstore,693.00,600.18,7,0,reconciled,
-2026-10-05,2026-09,googleplay,1107.20,939.51,11,0,reconciled,fees -168 · tax 0 (USD ledger)
-2026-10-05,2026-09,huawei,299.56,254.63,3,0,estimate,net est. at 15% fee
+2026-10-06,2026-09,appstore,693.00,600.18,7,0,reconciled,
+2026-10-06,2026-09,googleplay,1107.20,939.51,11,0,reconciled,fees -168 · tax 0 (USD ledger)
+2026-10-06,2026-09,huawei,299.56,254.63,3,0,estimate,net est. at 15% fee
