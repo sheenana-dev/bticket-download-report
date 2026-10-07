@@ -32,6 +32,16 @@ class RevenueResult:
         return self.error_message is None and self.gross is not None
 
 
+@dataclass
+class DailyRevenue:
+    """Everything a daily revenue message needs — fetched, persisted, not sent."""
+
+    results: list[RevenueResult]
+    mtd: dict[str, dict]      # period_totals() keyed by platform key
+    data_date: date
+    currency: str
+
+
 class BaseRevenueClient(ABC):
     @abstractmethod
     def fetch_daily(self, target_date: date) -> RevenueResult:

@@ -39,7 +39,7 @@ from src.revenue.history import (
     PLATFORM_KEY, daily_rows, monthly_rows, period_totals, upsert_daily, upsert_monthly,
 )
 from src.revenue.huawei import HuaweiRevenueClient
-from src.revenue.models import RevenueResult
+from src.revenue.models import DailyRevenue, RevenueResult
 from src.revenue.pdf import build_monthly_pdf
 from src.telegram import send_telegram_document, send_telegram_message
 from src.utils.logger import setup_logging
@@ -66,19 +66,10 @@ def _prev_month(year: int, month: int) -> tuple[int, int]:
 
 
 # --------------------------------------------------------------------------- daily
-def run_daily(config: AppConfig, now: datetime, target: Optional[date], dry_run: bool) -> int:
-    fx = FxConverter(config.revenue.report_currency, config.revenue.fx_overrides)
-    clients = _clients(config, fx)
-    target = target or (now - timedelta(days=1)).date()
-    logger.info("Revenue daily — target %s", target)
-
-    results: list[RevenueResult] = []
-    for c in clients:
-        results.append(c.fetch_daily(target))
-
-    # Self-heal: refresh the trailing week so late exports/revisions land.
-    # A store whose target-day fetch errored (auth, network) is skipped — no
-    # point burning 7 more retry cycles against a dead endpoint.
+def _backfill_week(clients: list, results: list[RevenueResult], target: date) -> list[RevenueResult]:
+    """Self-heal: refresh the trailing week so late exports/revisions land.
+    A store whose target-day fetch errored (auth, network) is skipped — no
+    point burning 7 more retry cycles against a dead endpoint."""
     backfill: list[RevenueResult] = []
     dead = {r.store_name for r in results if r.error_message}
     for c in clients:
@@ -93,6 +84,18 @@ def run_daily(config: AppConfig, now: datetime, target: Optional[date], dry_run:
                     backfill.append(r)
             except Exception as e:  # noqa: BLE001
                 logger.warning("backfill %s %s failed: %s", c.store_name, d, e)
+    return backfill
+
+
+def collect_daily(config: AppConfig, now: datetime, target: Optional[date] = None) -> DailyRevenue:
+    """Fetch yesterday + backfill the trailing week, upsert history, compute MTD."""
+    fx = FxConverter(config.revenue.report_currency, config.revenue.fx_overrides)
+    clients = _clients(config, fx)
+    target = target or (now - timedelta(days=1)).date()
+    logger.info("Revenue daily — target %s", target)
+
+    results = [c.fetch_daily(target) for c in clients]
+    backfill = _backfill_week(clients, results, target)
 
     try:
         n = upsert_daily(results + backfill, fetched_on=now.date())
@@ -103,7 +106,12 @@ def run_daily(config: AppConfig, now: datetime, target: Optional[date], dry_run:
     # Data date = the day most stores actually returned; MTD = that month so far.
     data_date = next((r.period_start for r in results if r.ok), target)
     mtd = period_totals(data_date.replace(day=1), data_date)
-    message = format_daily(results, now, mtd, config.revenue.report_currency, data_date=data_date)
+    return DailyRevenue(results, mtd, data_date, config.revenue.report_currency)
+
+
+def run_daily(config: AppConfig, now: datetime, target: Optional[date], dry_run: bool) -> int:
+    rev = collect_daily(config, now, target)
+    message = format_daily(rev.results, now, rev.mtd, rev.currency, data_date=rev.data_date)
     logger.info("Report:\n%s", message)
 
     if dry_run:

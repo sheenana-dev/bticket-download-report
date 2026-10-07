@@ -1,5 +1,6 @@
 import csv
 import json
+import logging
 import os
 import sys
 from datetime import date, datetime, timedelta
@@ -13,14 +14,19 @@ except ImportError:
     pass
 
 from src.config import load_config
+from src.formatter import format_report
 from src.stores.apple import AppleStoreClient
+from src.stores.base import StoreResult
 from src.stores.google_play import GooglePlayClient
 from src.history import save_to_history, reconcile_history_rows, CSV_PATH
-from src.report import build_report
+from src.report import build_report_results
 from src.telegram import send_telegram_message
 from src.utils.logger import setup_logging
 
 CACHE_FILE = "cumulative_totals.json"
+
+# Same name setup_logging() returns, so log lines read "download_report: ...".
+logger = logging.getLogger("download_report")
 
 
 def load_cumulative_totals() -> dict:
@@ -141,6 +147,73 @@ def _backfill_google_play(data_str: str) -> None:
     logger.info("Backfilled %d Google Play row(s)", len(new_rows))
 
 
+def _fetch_with_cumulative(client, key: str, target: date, cumulative: dict) -> StoreResult:
+    """Fetch T-1 data; add to the running total only when the data date is new
+    (so consecutive runs on the same store date don't double-count)."""
+    result = client.fetch_report(target_date=target)
+    last_key = f"{key}_last_date"
+    if result.daily_downloads is not None and _is_newer_date(result.data_date, cumulative.get(last_key)):
+        cumulative[key] = cumulative.get(key, 0) + result.daily_downloads
+        cumulative[last_key] = result.data_date
+    total = cumulative.get(key, 0)
+    result.total_downloads = total if total > 0 else None
+    return result
+
+
+def _reconcile_google(google_client: GooglePlayClient, target: date, cumulative: dict) -> None:
+    """Re-fetch 30 days of Google Play to backfill stalled days and correct
+    retroactive GCS updates (the export can freeze then publish several days at
+    once). Monthly CSVs are cached per month, so the wide window is cheap."""
+    try:
+        recent_gp = google_client.fetch_recent_reports(target_date=target, lookback_days=30)
+        reconciled = reconcile_history_rows(recent_gp) if recent_gp else None
+        if reconciled:
+            cumulative.update(reconciled)
+            save_cumulative_totals(cumulative)
+            logger.info("Reconciled Google Play history (backfill + corrections)")
+    except Exception as e:
+        logger.warning("Google Play reconciliation failed (non-fatal): %s", e)
+
+
+def _google_churn(google_client: GooglePlayClient, target: date) -> dict:
+    """Uninstalls are sourced live from the export, not the CSV; never fatal."""
+    try:
+        daily_un, total_un = google_client.fetch_churn(target)
+        return {"Google Play": (daily_un, total_un)} if total_un is not None else {}
+    except Exception as e:
+        logger.warning("Churn fetch failed (non-fatal): %s", e)
+        return {}
+
+
+def collect_downloads(config, now: datetime) -> list[StoreResult]:
+    """Fetch, persist and reconcile download data; return per-store results.
+
+    Results are built from the CSV (single source of truth, matches the
+    dashboard), falling back to this run's API results for a platform not yet
+    in the CSV. Does not send anything.
+    """
+    yesterday = (now - timedelta(days=1)).date()
+    logger.info("Report date: %s, target data date: %s", now.date(), yesterday)
+
+    cumulative = load_cumulative_totals()
+    google_client = GooglePlayClient(config.google_play)
+    results = [
+        _fetch_with_cumulative(AppleStoreClient(config.apple), "apple", yesterday, cumulative),
+        _fetch_with_cumulative(google_client, "google_play", yesterday, cumulative),
+    ]
+    cumulative["last_updated"] = now.isoformat()
+    save_cumulative_totals(cumulative)
+
+    try:
+        save_to_history(results, cumulative)
+        logger.info("Download history saved to CSV")
+    except Exception as e:
+        logger.warning("Failed to save history CSV (non-fatal): %s", e)
+
+    _reconcile_google(google_client, yesterday, cumulative)
+    return build_report_results(now, fallback=results, churn=_google_churn(google_client, yesterday))
+
+
 def main():
     dry_run = "--dry-run" in sys.argv
 
@@ -167,84 +240,8 @@ def main():
         logger.error("Configuration error: %s", e)
         sys.exit(1)
 
-    pht = ZoneInfo(config.timezone)
-    now = datetime.now(pht)
-    yesterday = (now - timedelta(days=1)).date()
-
-    logger.info("Report date: %s, target data date: %s", now.date(), yesterday)
-
-    cumulative = load_cumulative_totals()
-    results = []
-
-    # Apple App Store (T-1 data)
-    # Track last fetched date to avoid double-counting on consecutive runs
-    logger.info("Fetching Apple App Store data...")
-    apple_client = AppleStoreClient(config.apple)
-    apple_result = apple_client.fetch_report(target_date=yesterday)
-    if apple_result.daily_downloads is not None:
-        last_apple_date = cumulative.get("apple_last_date")
-        if _is_newer_date(apple_result.data_date, last_apple_date):
-            cumulative["apple"] = cumulative.get("apple", 0) + apple_result.daily_downloads
-            cumulative["apple_last_date"] = apple_result.data_date
-    apple_total = cumulative.get("apple", 0)
-    apple_result.total_downloads = apple_total if apple_total > 0 else None
-    results.append(apple_result)
-
-    # Google Play (up to 5-day delay, cumulative tracked locally)
-    # Track last fetched date to avoid double-counting on consecutive runs
-    logger.info("Fetching Google Play data...")
-    google_client = GooglePlayClient(config.google_play)
-    google_result = google_client.fetch_report(target_date=yesterday)
-    if google_result.daily_downloads is not None:
-        last_gp_date = cumulative.get("google_play_last_date")
-        if _is_newer_date(google_result.data_date, last_gp_date):
-            cumulative["google_play"] = cumulative.get("google_play", 0) + google_result.daily_downloads
-            cumulative["google_play_last_date"] = google_result.data_date
-    gp_total = cumulative.get("google_play", 0)
-    google_result.total_downloads = gp_total if gp_total > 0 else None
-    results.append(google_result)
-
-    # Save cumulative totals
-    cumulative["last_updated"] = now.isoformat()
-    save_cumulative_totals(cumulative)
-
-    # Persist to CSV history
-    try:
-        save_to_history(results, cumulative)
-        logger.info("Download history saved to CSV")
-    except Exception as e:
-        logger.warning("Failed to save history CSV (non-fatal): %s", e)
-
-    # Re-fetch recent Google Play data to backfill stalled days and correct
-    # retroactive GCS updates (the export can freeze then publish several days
-    # at once — a single-date fetch would miss the intermediate days).
-    try:
-        # 30-day window so a multi-week export stall is still fully backfilled
-        # when it resumes (GCS monthly CSVs are cached per month, so this is cheap).
-        recent_gp = google_client.fetch_recent_reports(target_date=yesterday, lookback_days=30)
-        if recent_gp:
-            reconciled = reconcile_history_rows(recent_gp)
-            if reconciled:
-                for key, total in reconciled.items():
-                    cumulative[key] = total
-                save_cumulative_totals(cumulative)
-                logger.info("Reconciled Google Play history (backfill + corrections)")
-    except Exception as e:
-        logger.warning("Google Play reconciliation failed (non-fatal): %s", e)
-
-    # Churn (uninstalls) is sourced live from the export, not the CSV. Never let
-    # it break the core report.
-    churn: dict = {}
-    try:
-        gp_daily_un, gp_total_un = google_client.fetch_churn(yesterday)
-        if gp_total_un is not None:
-            churn["Google Play"] = (gp_daily_un, gp_total_un)
-    except Exception as e:
-        logger.warning("Churn fetch failed (non-fatal): %s", e)
-
-    # Build report from CSV (single source of truth, matches dashboard); fall
-    # back to this run's API results for a platform not yet in the CSV.
-    message = build_report(now, fallback=results, churn=churn)
+    now = datetime.now(ZoneInfo(config.timezone))
+    message = format_report(collect_downloads(config, now), report_time=now)
     logger.info("Report:\n%s", message)
 
     if dry_run:
