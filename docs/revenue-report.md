@@ -8,8 +8,8 @@ config, Telegram and retry code with the download report.
 
 | | Daily estimate | Monthly reconciled |
 |---|---|---|
-| Runs | every day with the download report (`daily_report.yml`) | 6th of month 09:07 PHT (`monthly_revenue.yml`) |
-| Output | bilingual Telegram text → download group | 2-page PDF (EN page, JA page) + caption → `REVENUE_MONTHLY_CHAT_ID` (CEO chat) |
+| Runs | every day, 4:37 PM PHT (`daily_report.yml`, triggered by cron-job.org — see `docs/daily-trigger.md`) | 6th of month 09:07 PHT (`monthly_revenue.yml`) |
+| Output | net revenue section of the combined daily message (`src.daily`) → download group | 2-page PDF (EN page, JA page) + caption → `REVENUE_MONTHLY_CHAT_ID` (CEO chat) |
 | Apple | Sales report DAILY — `Developer Proceeds × Units` is real net | Sales report MONTHLY — Apple's own roll-up |
 | Google | estimated sales report — net = (charged − tax) × (1 − fee) | earnings report ledger — real fee/tax/refund lines = payout |
 | Huawei | IAP export × (1 − fee) | same (Huawei exposes no ledger) — flagged "Estimate" in the PDF |
@@ -25,8 +25,7 @@ lag and Apple's revisions self-heal into the CSV (upsert, later fetch wins).
 ## Commands
 
 ```bash
-python -m src.revenue.main daily   --dry-run            # yesterday, no Telegram
-python -m src.revenue.main daily   --date 2026-09-01    # specific day
+python -m src.daily --dry-run                          # combined daily message (downloads + revenue), no Telegram
 python -m src.revenue.main monthly --dry-run            # previous month → reports/*.pdf
 python -m src.revenue.main monthly --month 2026-08
 python -m src.revenue.main probe   apple|google|huawei  # dump raw export headers/rows
@@ -53,8 +52,8 @@ python -m src.revenue.main probe   apple|google|huawei  # dump raw export header
    real export. `probe huawei --date <a day with a sale>` prints the CSV.
 4. **GitHub** — add secrets `HUAWEI_CLIENT_ID`, `HUAWEI_CLIENT_SECRET`,
    `HUAWEI_APP_ID`, `HUAWEI_UID`, and `REVENUE_MONTHLY_CHAT_ID` (the private
-   chat the monthly PDF goes to — see below). Optional
-   `REVENUE_TELEGRAM_CHAT_ID` moves the daily text off the download group.
+   chat the monthly PDF goes to — see below). Daily revenue is part of the
+   combined message, so it always goes to `TELEGRAM_CHAT_ID`.
    Repo *variables* hold any `REVENUE_*` fee/FX overrides.
 
    **Getting a private chat id**: Telegram bots cannot message a person

@@ -37,7 +37,7 @@ def _download_note(r: StoreResult) -> str:
     return note + (f" ⚠️{stale}d" if stale is not None else "")
 
 
-def _download_lines(results: Optional[list[StoreResult]]) -> list[str]:
+def download_lines(results: Optional[list[StoreResult]]) -> list[str]:
     if results is None:
         return ["📥 Downloads ダウンロード", f"   {UNAVAILABLE}"]
 
@@ -105,7 +105,7 @@ def format_combined(
         "📊 B-Ticket Daily · 日次レポート",
         f"📅 {report_time:%b %d} · {report_time:%I:%M %p} PHT",
         "",
-        *_download_lines(downloads),
+        *download_lines(downloads),
         "",
         *_revenue_lines(revenue),
     ]

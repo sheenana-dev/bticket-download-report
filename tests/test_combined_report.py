@@ -56,6 +56,11 @@ def test_fresh_store_has_no_stale_flag():
     assert "⚠️" not in ios_line
 
 
+def test_churn_line_only_for_stores_with_uninstalls():
+    msg = format_combined(_downloads(), _revenue(), NOW)
+    assert msg.count("churn 解約") == 1  # Android only; iOS has no uninstall data
+
+
 def test_failed_download_section_shows_unavailable():
     msg = format_combined(None, _revenue(), NOW)
     assert "📥 Downloads" in msg and "unavailable" in msg

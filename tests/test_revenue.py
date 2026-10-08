@@ -11,7 +11,7 @@ import responses
 
 from src.config import RevenueConfig
 from src.revenue.apple import AppleRevenueClient
-from src.revenue.formatter import format_daily, format_monthly_caption
+from src.revenue.formatter import format_monthly_caption
 from src.revenue.fx import StaticFx
 from src.revenue.google_play import GooglePlayRevenueClient
 from src.revenue.history import period_totals, upsert_daily, upsert_monthly, monthly_rows
@@ -190,24 +190,6 @@ def test_monthly_upsert(tmp_path):
 
 
 # -------------------------------------------------------------------- formatter
-def test_daily_message_is_bilingual_and_under_telegram_limit():
-    now = datetime(2026, 9, 3, 19, 0)
-    results = [
-        RevenueResult("App Store", date(2026, 9, 2), date(2026, 9, 2), gross=1500, net=1275, transactions=10),
-        RevenueResult("Google Play", date(2026, 9, 2), date(2026, 9, 2), note="no Play sales export for 202609 yet"),
-        RevenueResult("Huawei", date(2026, 9, 2), date(2026, 9, 2), error_message="500"),
-    ]
-    mtd = {"appstore": {"gross": 3000.0, "net": 2550.0, "transactions": 20, "refunds": 0, "days": 2}}
-    results[0].trials = 2
-    msg = format_daily(results, now, mtd, data_date=date(2026, 9, 2))
-    assert msg.startswith("<pre>") and msg.endswith("</pre>")
-    assert "₱1,275" in msg and "MTD: ₱3,000 gross" in msg
-    assert "10 paid, 2 trial" in msg and "有料 10 件・トライアル 2 件" in msg
-    assert "⏳ no Play sales export" in msg and "⚠️ Unavailable" in msg
-    assert "日次売上レポート" in msg and "取得不可" in msg
-    assert len(msg) < 4096
-
-
 def test_monthly_caption_fits_telegram_cap():
     results = [
         RevenueResult("App Store", date(2026, 8, 1), date(2026, 8, 31), gross=50000, net=42500, basis="reconciled"),

@@ -1,13 +1,12 @@
 """Build the Telegram report from the CSV history (single source of truth).
 
-Extracted so both the daily job (``src.main``) and the manual refresh tool
-(``scripts.refresh_google_play``) render the report through one code path.
+Shared by the combined daily report (``src.daily``) and the manual refresh
+tool's preview (``scripts.refresh_google_play``).
 """
 
 from datetime import datetime
 from typing import Optional
 
-from src.formatter import format_report
 from src.history import get_latest_per_platform
 from src.stores.base import StoreResult
 
@@ -66,12 +65,3 @@ def build_report_results(
         r.total_uninstalls = total_un
 
     return results
-
-
-def build_report(
-    now: datetime,
-    fallback: Optional[list[StoreResult]] = None,
-    churn: Optional[Churn] = None,
-) -> str:
-    """Render the full bilingual report string from CSV history."""
-    return format_report(build_report_results(now, fallback, churn), report_time=now)

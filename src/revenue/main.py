@@ -1,13 +1,12 @@
 """Revenue report entry point.
 
-    python -m src.revenue.main daily   [--date YYYY-MM-DD] [--dry-run]
     python -m src.revenue.main monthly [--month YYYY-MM]   [--dry-run] [--out reports/]
     python -m src.revenue.main probe   huawei|apple|google [--date YYYY-MM-DD]
 
-`daily` fetches yesterday (PHT) from all three stores, upserts data/revenue.csv,
-and posts the bilingual Telegram summary. It also re-fetches the previous 7
-days so late-posting stores (Google's 3–7 day lag, Apple revisions) back-fill
-themselves — same self-healing idea as the download report's reconcile.
+Daily revenue is part of the combined daily report (`python -m src.daily`),
+which calls `collect_daily()` here: fetch yesterday (PHT) from all three
+stores, re-fetch the previous 7 days so late-posting stores (Google's 3–7 day
+lag, Apple revisions) back-fill themselves, and upsert data/revenue.csv.
 
 `monthly` builds the reconciled PDF for the previous month (or --month) and
 sends it as a Telegram document with a short caption.
@@ -32,7 +31,7 @@ except ImportError:
 
 from src.config import AppConfig, load_config
 from src.revenue.apple import AppleRevenueClient
-from src.revenue.formatter import format_daily, format_monthly_caption
+from src.revenue.formatter import format_monthly_caption
 from src.revenue.fx import FxConverter
 from src.revenue.google_play import GooglePlayRevenueClient
 from src.revenue.history import (
@@ -41,7 +40,7 @@ from src.revenue.history import (
 from src.revenue.huawei import HuaweiRevenueClient
 from src.revenue.models import DailyRevenue, RevenueResult
 from src.revenue.pdf import build_monthly_pdf
-from src.telegram import send_telegram_document, send_telegram_message
+from src.telegram import send_telegram_document
 from src.utils.logger import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -107,18 +106,6 @@ def collect_daily(config: AppConfig, now: datetime, target: Optional[date] = Non
     data_date = next((r.period_start for r in results if r.ok), target)
     mtd = period_totals(data_date.replace(day=1), data_date)
     return DailyRevenue(results, mtd, data_date, config.revenue.report_currency)
-
-
-def run_daily(config: AppConfig, now: datetime, target: Optional[date], dry_run: bool) -> int:
-    rev = collect_daily(config, now, target)
-    message = format_daily(rev.results, now, rev.mtd, rev.currency, data_date=rev.data_date)
-    logger.info("Report:\n%s", message)
-
-    if dry_run:
-        logger.info("Dry run — skipping Telegram send")
-        return 0
-    ok = send_telegram_message(config.telegram, message, chat_id=config.revenue.chat_id)
-    return 0 if ok else 1
 
 
 # ------------------------------------------------------------------------- monthly
@@ -274,10 +261,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="src.revenue.main")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_daily = sub.add_parser("daily")
-    p_daily.add_argument("--date", help="data date YYYY-MM-DD (default: yesterday PHT)")
-    p_daily.add_argument("--dry-run", action="store_true")
-
     p_month = sub.add_parser("monthly")
     p_month.add_argument("--month", help="YYYY-MM (default: previous month)")
     p_month.add_argument("--out", default="reports")
@@ -300,9 +283,6 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     now = datetime.now(ZoneInfo(config.timezone))
 
-    if args.cmd == "daily":
-        target = date.fromisoformat(args.date) if args.date else None
-        return run_daily(config, now, target, args.dry_run)
     if args.cmd == "monthly":
         return run_monthly(config, now, args.month, args.out, args.dry_run,
                            daily_backfill=not args.skip_daily_backfill)

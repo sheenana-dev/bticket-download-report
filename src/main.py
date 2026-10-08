@@ -5,7 +5,6 @@ import os
 import sys
 from datetime import date, datetime, timedelta
 from typing import Optional
-from zoneinfo import ZoneInfo
 
 try:
     from dotenv import load_dotenv
@@ -13,14 +12,11 @@ try:
 except ImportError:
     pass
 
-from src.config import load_config
-from src.formatter import format_report
 from src.stores.apple import AppleStoreClient
 from src.stores.base import StoreResult
 from src.stores.google_play import GooglePlayClient
 from src.history import save_to_history, reconcile_history_rows, CSV_PATH
 from src.report import build_report_results
-from src.telegram import send_telegram_message
 from src.utils.logger import setup_logging
 
 CACHE_FILE = "cumulative_totals.json"
@@ -231,29 +227,10 @@ def main():
         _backfill_google_play(sys.argv[backfill_idx + 1])
         return
 
-    logger = setup_logging()
-    logger.info("Starting B-Ticket Daily Download Report generation")
-
-    try:
-        config = load_config()
-    except ValueError as e:
-        logger.error("Configuration error: %s", e)
-        sys.exit(1)
-
-    now = datetime.now(ZoneInfo(config.timezone))
-    message = format_report(collect_downloads(config, now), report_time=now)
-    logger.info("Report:\n%s", message)
-
-    if dry_run:
-        logger.info("Dry run — skipping Telegram send")
-        return
-
-    success = send_telegram_message(config.telegram, message)
-    if not success:
-        logger.error("Failed to send Telegram message after retries")
-        sys.exit(1)
-
-    logger.info("Daily download report sent successfully")
+    # The standalone download message was replaced by the combined daily report;
+    # keep `python -m src.main` working as an alias so nothing sends the old format.
+    from src.daily import main as daily_main  # local import: src.daily imports this module
+    sys.exit(daily_main(["--dry-run"] if dry_run else []))
 
 
 if __name__ == "__main__":

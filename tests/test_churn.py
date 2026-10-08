@@ -1,37 +1,9 @@
-"""Tests for churn (uninstalls): Google export summing + report rendering."""
+"""Tests for churn (uninstalls): Google export summing. Rendering: test_combined_report."""
 
-from datetime import date, datetime
+from datetime import date
 from unittest.mock import MagicMock, patch
-from zoneinfo import ZoneInfo
 
-from src.formatter import format_report
-from src.stores.base import StoreResult
 from src.stores.google_play import GooglePlayClient
-
-
-def _time():
-    return datetime(2026, 6, 30, 9, 0, 0, tzinfo=ZoneInfo("Asia/Manila"))
-
-
-# ----- formatter renders churn only when present -----
-
-def test_churn_line_rendered_both_languages():
-    results = [
-        StoreResult("Google Play", daily_downloads=83, total_downloads=1884,
-                    data_date="Jun 30", daily_uninstalls=67, total_uninstalls=934),
-    ]
-    msg = format_report(results, _time())
-    assert "Churn: 67 today | 934 total" in msg
-    assert "アンインストール: 67 今日 | 934 累計" in msg
-
-
-def test_churn_omitted_when_absent():
-    results = [
-        StoreResult("App Store", daily_downloads=14, total_downloads=599, data_date="Jul 05"),
-    ]
-    msg = format_report(results, _time())
-    assert "Churn" not in msg
-    assert "アンインストール" not in msg
 
 
 # ----- GooglePlayClient.fetch_churn sums across months, exact package only -----

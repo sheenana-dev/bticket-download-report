@@ -32,7 +32,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from src.manual_refresh import apply_google_refresh, parse_csv, parse_pairs
-from src.report import build_report
+from src.combined_report import download_lines
+from src.report import build_report_results
 from src.utils.logger import setup_logging
 
 
@@ -65,7 +66,7 @@ def main() -> None:
         logger.info("Reconciled. Google Play cumulative is now %d.", updated.get("google_play", -1))
 
     now = datetime.now(ZoneInfo("Asia/Manila"))
-    preview = build_report(now).replace("<pre>", "").replace("</pre>", "")
+    preview = "\n".join(download_lines(build_report_results(now)))
     print("\n----- REPORT PREVIEW -----\n" + preview + "\n--------------------------")
     print(
         "\nTo deliver: commit data/downloads.csv, push, then "
