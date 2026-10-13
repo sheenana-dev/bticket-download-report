@@ -588,3 +588,5 @@ date,report_date,platform,daily_downloads,cumulative_total
 2026-10-10,2026-10-09,appstore,4,911
 2026-10-11,2026-10-10,appstore,0,911
 2026-10-12,2026-10-11,appstore,3,914
+2026-10-13,2026-10-12,appstore,1,915
+2026-10-13,2026-10-09,googleplay,1,8225
